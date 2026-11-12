@@ -2,24 +2,65 @@
 
 Local dashboard for the **Stiebel Eltron ISG** heat pump, the
 **KOSTAL PLENTICORE plus** PV inverter with its battery and the
-**openWB** wallbox, plus a PV-led hot water controller that keeps the
-house battery from paying for hot water.
+**openWB** wallbox, plus a PV-led hot water and heating controller that keeps the
+house battery from paying for hot water. The pages are in German.
+
+![Overview: energy flow, live tiles, money today and the controllers' decisions](docs/screenshots/overview.png)
+
+## Highlights
+
+### Weather and PV forecast
+
+![PV and weather forecast card](docs/screenshots/forecast.png)
+
+- **Free, no API key:** hourly *global tilted irradiance* from [Open-Meteo](https://open-meteo.com/)
+  for each PV array (tilt, azimuth, kWp) → expected yield per hour, with the weather of each hour.
+- **Learns your roof:** every day the dashboard stores the day-ahead forecast and compares it with
+  the inverter's real yield. The calibration factor is Σ real yield ÷ Σ day-ahead forecast over
+  the last 21 days, so shading, soiling and inverter losses are corrected automatically
+  ("Kalibrierung × 0,73"; marked provisional until 3 days are logged).
+- **Today and tomorrow at a glance:** kWh, temperatures, sunshine hours, the weather now and in the
+  next part of the day, and hourly PV bars for both days.
+- **3-day outlook** (click a day or „Nächste 3 Tage“): weather every 3 hours, min/max temperature,
+  rain (mm and probability), wind, sunshine and the hourly PV profile per day.
+- **It drives the control:** hot water waits for tomorrow's sun instead of reheating from the grid,
+  stores extra heat before a dull day, and the floor heating lowers its target overnight when
+  the sun will come.
+
+![3-day outlook: weather every 3 hours and the hourly PV profile](docs/screenshots/outlook.png)
+
+### Cost calculation
+
+![Finance tab: daily balance chart, monthly and daily ledger, value of a PV kWh per use](docs/screenshots/finance.png)
+
+- **A daily ledger with the prices valid that day:** grid import × buy price, feed-in × feed-in tariff
+  and the balance, per day and per month. A price change only affects the days after it.
+- **What PV really saves** („Vorteil durch PV“): what house and car would have cost from the grid
+  without PV, plus the day's balance.
+- **Heat pump electricity, measured:** kWh per day for heating and hot water from the heat pump's
+  Wh day counters, the measured COP per day and month, and the electric backup heater's kWh, so
+  expensive heater hours don't hide in the sum.
+- **The value of a PV kWh per use** (merit order): direct use, preheating the house, hot water,
+  charging the battery, hot water above the need, feed-in, each in ct/kWh with the live COP.
+  This is the ranking the controllers follow.
+- **Strategy simulation:** model days, the PV-led strategy against fixed targets, with the live
+  settings.
 
 ## Site topology
 
 Read live from openWB (`openWB/counter/get/hierarchy`):
 
 ```
-Stromnetz
-└── Netzanschluss (counter 0, "Kostal Plenticore Zähler")
-    ├── Kostal Plenticore Wechselrichter (inverter 2) ← PV-Module (DC1, DC2)
-    │   └── Kostal Plenticore Speicher (bat 4, DC-coupled, 10.2 kWh)
-    ├── openWB2 (charge point 6, 3-phase, PV-Laden)
-    └── Haus (rest, computed by openWB)
-        └── Wärmepumpe (no meter of its own)
+Grid
+└── Grid connection (counter 0, the Kostal Plenticore meter)
+    ├── Kostal Plenticore inverter (inverter 2) ← PV modules (DC1, DC2)
+    │   └── Kostal Plenticore battery (bat 4, DC-coupled)
+    ├── openWB2 (charge point 6, 3-phase, PV charging)
+    └── House (the rest, computed by openWB)
+        └── Heat pump (no meter of its own)
 ```
 
-The Kostal's "Hausverbrauch" includes the wallbox (same meter); the dashboard uses
+The Kostal's house consumption includes the wallbox (same meter); the dashboard uses
 openWB's home consumption, which excludes it.
 
 Python 3.11+, **no dependencies** (stdlib only), vanilla JS front end with no build step.
@@ -108,25 +149,30 @@ database (so it survives restarts and is in the nightly backup), 90 days; the sa
 
 ## Tabs
 
-- **Übersicht**: producer/consumer balance bars and an energy-flow diagram drawn from the openWB topology (animated in the
-  direction power flows), live tiles, controller decision, PV forecast (click a day or „Nächste 3 Tage“
-  for the 3-day outlook: weather every 3 h, temperatures, rain, wind, hourly PV), power / hot water /
-  SOC charts (hover for values, "Tabelle" for a table view).
-- **Bad vorbereiten** (overview card): ask for hot water for a bath at a time (default 17:30,
-  55 °C). The controller heats with PV surplus first (even before the battery is full) and
-  starts anyway at the computed latest start, so the bath is ready on time.
-- **Finanzen**: today's balance, a daily chart (feed-in income ▲ / grid cost ▼ / balance), daily and
-  monthly tables incl. "Vorteil durch PV", the merit order and the strategy simulation. The ledger
-  (table `days` in the database) records each day's totals with the prices valid that day.
-- **PV-Regelung**: hot water strategy, PV heating (winter), forecast, write-limit and alert/push settings;
-  decision logs for hot water and heating.
-- **So funktioniert's**: visual explanation of both controllers. The live part draws the
-  trace that `decide()` / `decide_heating()` record for every decision (✓/✗ per check with
-  the live values), plus a schematic sunny vs. dull day and the main settings.
-  "An Wärmepumpe senden" is **off** by default (test mode: decisions are only shown).
-- **Geräte-Einstellungen**: heat pump settings grouped like the ISG pages. Only
+The UI labels are German; the German name is in parentheses.
+
+- **Overview** („Übersicht“): producer/consumer balance bars and an energy-flow diagram drawn from
+  the openWB topology (animated in the direction power flows), live tiles, money today, the
+  controllers' decisions, the PV and weather forecast (click a day or „Nächste 3 Tage“ for the
+  3-day outlook), power / hot water / battery charts (hover for values, „Tabelle“ for a table view).
+- **Bath** („Bad vorbereiten“, a card on the overview): ask for hot water for a bath at a time
+  (default 17:30, 55 °C). The controller heats with PV surplus first (even before the battery is
+  full) and starts anyway at the computed latest start, so the bath is ready on time.
+- **Finance** („Finanzen“): today's balance, a daily chart (feed-in income ▲ / grid cost ▼ /
+  balance), daily and monthly tables including the benefit from PV, the merit order and the strategy
+  simulation. The ledger (table `days` in the database) records each day's totals with the prices
+  valid that day.
+- **PV control** („PV-Regelung“): hot water strategy, PV heating (winter), forecast, write limit and
+  alert/push settings; decision logs for hot water and heating.
+- **How it works** („So funktioniert's“): a visual explanation of both controllers. The live part
+  draws the trace that `decide()` / `decide_heating()` record for every decision (✓/✗ per check
+  with the live values), plus a schematic sunny vs. dull day and the main settings.
+  „An Wärmepumpe senden“ (send to the heat pump) is **off** by default: test mode, decisions are
+  only shown.
+- **Device settings** („Geräte-Einstellungen“): heat pump settings grouped like the ISG pages. Only
   registers that are confirmed are writable; the rest are shown read-only with the reason.
-- **Alle Werte**: every value from both devices.
+- **All values** („Alle Werte“): every value from every device; status codes are shown as text.
+- **Log** („Protokoll“): warnings, errors, restarts and alerts, newest first.
 
 ## Architecture
 
@@ -150,7 +196,7 @@ homeenergy/
   finance.py       Daily/monthly money ledger (days table in the SQLite store)
   store.py         SQLite store: samples, 15-min averages, days, decisions; upkeep and backup
   migrate.py       One-time import of the JSON files used before SQLite
-  simulate.py      Model days: strategy vs fixed targets (used by tests and the Finanzen tab)
+  simulate.py      Model days: strategy vs fixed targets (used by tests and the Finance tab)
   controller.py    Generic SetpointController (dry run, rate limits, restore, log);
                    DhwController (WW Soll Tag) and HeatingController (Raumtemp. Tag)
   config.py        Config dataclasses, JSON persistence, UI field metadata
@@ -168,14 +214,14 @@ homeenergy/
 web/
   app.js           Wiring only: tabs, polling (paused while hidden), draws the visible tab
   state.js         Loads the state, joins it with the rarely changing meta (labels, rule texts)
-  overview.js      Übersicht: tiles, flow, money, decisions, bath request, forecast
-  timeline.js      Übersicht charts and the history they draw (48 h kept in the page, longer from the DB)
-  controltab.js    PV-Regelung: decision logs and the settings forms
-  explain.js       So funktioniert's: draws the steps the server sends next to the rules
-  finance.js       Finanzen: money today, merit order, ledger
-  details.js       Alle Werte: every device value
+  overview.js      Overview: tiles, flow, money, decisions, bath request, forecast
+  timeline.js      Overview charts and the history they draw (48 h kept in the page, longer from the DB)
+  controltab.js    PV control: decision logs and the settings forms
+  explain.js       How it works: draws the steps the server sends next to the rules
+  finance.js       Finance: money today, merit order, ledger
+  details.js       All values: every device value
   alerts.js        Alert banner above every tab
-  logtab.js        Protokoll: the error log
+  logtab.js        Log: the error log
   flow.js, balancechart.js, charts.js, forms.js, icons.js, lib.js, style.css, index.html
 tests/             unit tests incl. a fake Modbus TCP server
 docs/              strategy.md (research + rules + forecast), register-verification.md
