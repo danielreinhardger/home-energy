@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Smarthome 28 logo: the dashboard's house icon (icons.js "house") on the Deep Navy theme.
+       The filled square keeps it readable on light and dark browser tabs alike. -->
+  <rect width="32" height="32" rx="7" fill="#12223a"/>
+  <g transform="translate(4 4)" fill="none" stroke="#4da3ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 11 12 4l8.5 7"/>
+    <path d="M5.5 9.5V20h13V9.5"/>
+    <path d="M10 20v-5h4v5"/>
+  </g>
+</svg>

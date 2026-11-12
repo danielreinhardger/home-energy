@@ -1,0 +1,14 @@
+# Deploy on the NAS:  cd <DIR> && sudo docker compose up -d --build   (or ./deploy.sh from the PC)
+services:
+  home-energy:
+    build: .
+    image: home-energy:local
+    container_name: home-energy
+    restart: unless-stopped
+    user: "1001:100"            # uid:gid of the NAS user that owns ./config – adjust to yours
+    environment:
+      - TZ=Europe/Berlin
+    ports:
+      - "8085:8085"             # LAN only: never forward this port to the internet
+    volumes:
+      - ./config:/config        # config.json + data/ (state, decision log)

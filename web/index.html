@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smarthome 28</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1 class="brand"><img src="favicon.svg" alt="" width="26" height="26">Smarthome 28</h1>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="overview" aria-selected="true">Übersicht</button>
+      <button role="tab" data-tab="finance">Finanzen</button>
+      <button role="tab" data-tab="control">PV-Regelung</button>
+      <button role="tab" data-tab="explain">So funktioniert's</button>
+      <button role="tab" data-tab="settings">Geräte-Einstellungen</button>
+      <button role="tab" data-tab="details">Alle Werte</button>
+      <button role="tab" data-tab="log">Protokoll</button>
+    </nav>
+    <span id="status" class="status" aria-live="polite"></span>
+  </header>
+
+  <main>
+    <div id="alerts" class="alerts" role="alert" hidden></div>
+    <!-- Übersicht -->
+    <section id="tab-overview" class="tab" role="tabpanel">
+      <article class="card">
+        <h2>Energiefluss jetzt</h2>
+        <div class="balance" id="balance"></div>
+        <div class="flow-wrap" id="flow"></div>
+        <p class="flow-source" id="flow-source"></p>
+      </article>
+
+      <div class="tile-groups">
+        <article class="card tile-group">
+          <h2>Energie</h2>
+          <div class="tiles" id="tiles-energy"></div>
+        </article>
+        <article class="card tile-group">
+          <h2>Wärme</h2>
+          <div class="tiles" id="tiles-heat"></div>
+        </article>
+      </div>
+
+      <article class="card">
+        <h2>Energie &amp; Geld heute</h2>
+        <div id="money"></div>
+      </article>
+
+      <div class="grid2">
+        <article class="card" id="heating-card">
+          <h2>PV-Heizen</h2>
+          <div id="heating"></div>
+        </article>
+        <article class="card" id="decision-card">
+          <h2>PV-Warmwasserregelung</h2>
+          <div id="decision"></div>
+        </article>
+      </div>
+
+      <article class="card">
+        <h2>PV- und Wetterprognose</h2>
+        <div id="forecast"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>Leistung</h2>
+          <div class="seg" role="group" aria-label="Zeitraum">
+            <button data-range="3" aria-pressed="false">3 h</button>
+            <button data-range="12" aria-pressed="true">12 h</button>
+            <button data-range="48" aria-pressed="false">48 h</button>
+            <button data-range="168" aria-pressed="false">7 T</button>
+            <button data-range="720" aria-pressed="false">30 T</button>
+            <button data-range="8760" aria-pressed="false">1 J</button>
+          </div>
+          <button class="link" id="toggle-table">Tabelle</button>
+        </div>
+        <div class="legend" id="power-legend"></div>
+        <div class="chart" id="power-chart"></div>
+        <div class="table-wrap" id="power-table" hidden></div>
+      </article>
+
+      <div class="grid2">
+        <article class="card">
+          <h2>Warmwasser</h2>
+          <div class="legend" id="dhw-legend"></div>
+          <div class="chart small" id="dhw-chart"></div>
+        </article>
+        <article class="card">
+          <h2>Batterie-Ladezustand</h2>
+          <div class="chart small" id="soc-chart"></div>
+        </article>
+      </div>
+
+      <article class="card" id="bath-card">
+        <h2 id="bath-title">Bad vorbereiten</h2>
+        <div id="bath"></div>
+      </article>
+    </section>
+
+    <!-- Regelung -->
+    <section id="tab-control" class="tab" role="tabpanel" hidden>
+      <p class="intro">Die Regelung nutzt den Warmwasserspeicher als Wärmebatterie: Bei PV-Überschuss wird er aufgeheizt,
+        vor sonnigen Stunden wartet sie auf die Sonne, damit die Hausbatterie nicht fürs Warmwasser entladen wird.
+        <strong>„An Wärmepumpe senden“</strong> aus = Testbetrieb, es wird nur angezeigt.</p>
+      <div class="grid2">
+        <form class="card cfg" data-section="heating"><h2>PV-Heizen (Winter)</h2></form>
+        <form class="card cfg" data-section="dhw"><h2>Warmwasser-Strategie</h2></form>
+        <div>
+          <form class="card cfg" data-section="forecast"><h2>Wetterprognose</h2></form>
+          <form class="card cfg" data-section="economy"><h2>Preise &amp; Wirkungsgrade</h2></form>
+          <form class="card cfg" data-section="limits"><h2>Schreibschutz</h2></form>
+          <form class="card cfg" data-section="alerts"><h2>Hinweise &amp; Push</h2></form>
+        </div>
+      </div>
+      <article class="card">
+        <h2>Entscheidungen PV-Heizen</h2>
+        <div class="table-wrap" id="heating-log"></div>
+      </article>
+      <article class="card">
+        <h2>Entscheidungen Warmwasser</h2>
+        <div class="table-wrap" id="decision-log"></div>
+      </article>
+    </section>
+
+    <!-- Finanzen -->
+    <section id="tab-finance" class="tab" role="tabpanel" hidden>
+      <article class="card">
+        <h2>Heute</h2>
+        <div id="money-fin"></div>
+      </article>
+      <article class="card">
+        <h2>Verlauf: Ertrag und Kosten pro Tag</h2>
+        <div id="finance"><p class="msg">Lädt …</p></div>
+      </article>
+      <article class="card">
+        <h2>Wohin mit überschüssigem Sonnenstrom? Wert je kWh</h2>
+        <div id="merit"></div>
+      </article>
+      <article class="card">
+        <h2>Was bringt die Strategie? (Simulation)</h2>
+        <div id="simulation"></div>
+      </article>
+    </section>
+
+    <!-- So funktioniert's -->
+    <section id="tab-explain" class="tab" role="tabpanel" hidden>
+      <div id="explain"><p class="msg">Lädt …</p></div>
+    </section>
+
+    <!-- Geräte-Einstellungen -->
+    <section id="tab-settings" class="tab" role="tabpanel" hidden>
+      <div id="device-settings"></div>
+    </section>
+
+    <!-- Alle Werte -->
+    <section id="tab-details" class="tab" role="tabpanel" hidden>
+      <div id="device-values" class="grid2"></div>
+    </section>
+
+    <!-- Protokoll -->
+    <section id="tab-log" class="tab" role="tabpanel" hidden>
+      <article class="card">
+        <div class="card-head">
+          <h2>Fehlerprotokoll</h2>
+          <div class="seg" role="group" aria-label="Filter">
+            <button type="button" data-log-filter="" aria-pressed="true">Alles</button>
+            <button type="button" data-log-filter="error,warning" aria-pressed="false">Nur Fehler &amp; Warnungen</button>
+          </div>
+        </div>
+        <p class="msg">Warnungen und Fehler des Dienstes, dazu Neustarts, Geräte, die wieder antworten, und
+          erledigte Hinweise. Gleiche Meldungen innerhalb von 10 Minuten werden zusammengefasst. Gespeichert in der
+          Datenbank auf dem NAS, 90 Tage lang.</p>
+        <div id="event-log" class="table-wrap"></div>
+      </article>
+    </section>
+  </main>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <dialog id="outlook" class="outlook" aria-labelledby="outlook-title">
+    <div class="outlook-head">
+      <h2 id="outlook-title">Wetter und PV – die nächsten 3 Tage</h2>
+      <button id="outlook-close" class="btn icon-btn" aria-label="Schließen"></button>
+    </div>
+    <div id="outlook-body"></div>
+  </dialog>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

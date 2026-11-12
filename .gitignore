@@ -1,0 +1,6 @@
+__pycache__/
+config.json
+data/
+backups/
+deploy.env
+.env
