@@ -16,6 +16,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
+from .i18n import t
 from .cop import HEAT_OUTPUT_KW, CopModel
 from .economics import EconomyConfig
 from .forecast import ForecastSummary
@@ -173,10 +174,10 @@ def run(s: Scenario, strategy: bool, days: int = 2, eco: EconomyConfig | None = 
 
 
 SCENARIOS = (
-    Scenario("Sonniger Wintertag (5 °C)", pv_peak_kw=4.5, outside_c=5.0),
-    Scenario("Trüber Wintertag, morgen Sonne", pv_peak_kw=1.2, outside_c=3.0, pv_peak_tomorrow_kw=4.5),
-    Scenario("Kalter Sonnentag (−5 °C)", pv_peak_kw=4.5, outside_c=-5.0),
-    Scenario("Sommertag", pv_peak_kw=8.0, outside_c=20.0, sun_from=6.0, sun_to=20.0, soc_start=0.5),
+    Scenario("sunny_winter", pv_peak_kw=4.5, outside_c=5.0),          # names: "sim.scenario.<code>"
+    Scenario("dull_winter", pv_peak_kw=1.2, outside_c=3.0, pv_peak_tomorrow_kw=4.5),
+    Scenario("cold_sunny", pv_peak_kw=4.5, outside_c=-5.0),
+    Scenario("summer", pv_peak_kw=8.0, outside_c=20.0, sun_from=6.0, sun_to=20.0, soc_start=0.5),
 )
 
 
@@ -189,7 +190,7 @@ def compare(eco: EconomyConfig | None = None, dcfg: DhwConfig | None = None,
         base = run(s, strategy=False, eco=eco, dcfg=dcfg, hcfg=hcfg, cop=cop)
         new = run(s, strategy=True, eco=eco, dcfg=dcfg, hcfg=hcfg, cop=cop)
         rows.append({
-            "scenario": s.name,
+            "code": s.name, "scenario": t(f"sim.scenario.{s.name}"),
             "baseline_eur": round(base.money(eco), 2), "strategy_eur": round(new.money(eco), 2),
             "saving_eur": round(base.money(eco) - new.money(eco), 2),
             "hp_night_kwh": (round(base.hp_kwh_night, 2), round(new.hp_kwh_night, 2)),

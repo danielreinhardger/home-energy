@@ -33,7 +33,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from .rules import Decision, RunState, Trace, de, held, minutes_since, stage
+from .i18n import fnum, t
+from .rules import Decision, RunState, Trace, held, minutes_since, stage
 from .situation import Situation
 from .settings import flag, num
 
@@ -56,76 +57,59 @@ class HeatState(RunState):
 
 @dataclass
 class HeatingConfig:
-    enabled: bool = flag(True, 'PV-Heizen aktiv', 'Im Winter PV-Überschuss als Wärme im Haus speichern.')
+    enabled: bool = flag(True)
     # False = test mode: decide and log, never write
-    apply: bool = flag(False, 'An Wärmepumpe senden', 'Aus = Testbetrieb: Entscheidungen werden nur angezeigt.')
+    apply: bool = flag(False)
     # the room target you normally want (Raumtemp. Tag HK1)
-    normal_temp: float = num(22.0, 'Normale Raumtemperatur', '°C', 10, 30, 0.5,
-                             'Was ihr normalerweise wollt (Raumtemp. Tag HK1).')
+    normal_temp: float = num(22.0, '°C', 10, 30, 0.5)
     # comfort floor: battery first, cold evenings, nights
-    room_min: float = num(20.0, 'Minimum ohne PV', '°C', 10, 30, 0.5,
-                          'Abends/nachts, wenn Sonne kommt: bis hierher darf es abkühlen, bevor die Wärmepumpe heizt.')
+    room_min: float = num(20.0, '°C', 10, 30, 0.5)
     # highest buffer temperature with PV
-    room_max: float = num(24.0, 'Maximum als Wärmepuffer', '°C', 10, 30, 0.5,
-                          'Bis hierher darf PV das Haus aufheizen – je mehr Sonne noch kommt, desto höher.')
+    room_max: float = num(24.0, '°C', 10, 30, 0.5)
     # heat the house stores per K (estimate, docs/strategy.md)
-    house_kwh_per_k: float = num(20.0, 'Speicherfähigkeit Haus', 'kWh/K', 2, 100, 1,
-                                 'Schätzung; bestimmt, wie viel PV ein voller Puffer braucht.')
+    house_kwh_per_k: float = num(20.0, 'kWh/K', 2, 100, 1)
     # where the real room temperature comes from (the LWZ has no room sensor of its own)
-    room_sensor_max_age_min: float = num(180, 'Raumfühler gilt', 'min', 15, 1440, 15,
-                                         'So lange zählt die letzte Meldung des Raumfühlers. Fühler meldet an '
-                                         '/api/sensor/room?t=…&h=… (Shelly H&T: Webhook, siehe README). '
-                                         'Ohne gültigen Wert heizt PV bis zum Puffer-Ziel, ohne „Puffer voll“-Prüfung.')
-    room_from_isg: bool = flag(False, 'Raumtemperatur von der Wärmepumpe',
-                               'Nur mit Stiebel-Raumbedienung (FET). Ohne sie meldet die Wärmepumpe nur ihr Raum-Soll zurück.')
+    room_sensor_max_age_min: float = num(180, 'min', 15, 1440, 15)
+    room_from_isg: bool = flag(False)
     # PV forecast below this = no sun worth waiting for
-    poor_day_kwh: float = num(8.0, 'Trüber Tag unter', 'kWh', 0, 100, 0.5,
-                              'Dann keine Absenkung – es kommt keine Sonne.')
+    poor_day_kwh: float = num(8.0, 'kWh', 0, 100, 0.5)
     # heating season: outside colder than this
-    outside_max: float = num(15.0, 'Heizperiode unter', '°C', 0, 25, 0.5, 'Nur wenn es draußen kälter ist.')
+    outside_max: float = num(15.0, '°C', 0, 25, 0.5)
     # against flip-flopping between normal, setback and battery first
-    mode_min_min: float = num(45.0, 'Mindestdauer je Betriebsart', 'min', 0, 240, 5,
-                              'Normal, Absenkung und „Batterie zuerst“ wechseln frühestens nach dieser Zeit – '
-                              'keine Sprünge bei Wolken oder schwankender Prognose.')
+    mode_min_min: float = num(45.0, 'min', 0, 240, 5)
     # PV fills the battery before the house is preheated
-    battery_first: bool = flag(True, 'Batterie zuerst',
-                               'Tagsüber wird erst die Batterie voll. Solange sie das heute nicht schafft, wird nicht vorgeheizt – '
-                               'das Haus bleibt bei der normalen Raumtemperatur.')
+    battery_first: bool = flag(True)
     # battery counts as full from here
-    soc_full: float = num(95.0, 'Batterie gilt als voll ab', '%', 50, 100, 1)
-    battery_fill_safety: float = num(1.2, 'Sicherheitsfaktor Batterie', '', 1, 3, 0.05,
-                                     'Prognose muss den Batteriebedarf so oft decken, bevor das Haus Vorrang bekommt.')
+    soc_full: float = num(95.0, '%', 50, 100, 1)
+    battery_fill_safety: float = num(1.2, '', 1, 3, 0.05)
     # export/charging beyond the battery's need to start preheating
-    start_surplus_w: float = num(800.0, 'Startschwelle Überschuss', 'W', 200, 8000, 50)
-    start_delay_min: float = num(10.0, 'Startverzögerung', 'min', 0, 60, 1)
+    start_surplus_w: float = num(800.0, 'W', 200, 8000, 50)
+    start_delay_min: float = num(10.0, 'min', 0, 60, 1)
     # first target = room + this (slow compressor start)
-    start_offset_k: float = num(0.3, 'Sanfter Start: Raum +', 'K', 0.1, 2, 0.1,
-                                'Das erste Ziel liegt knapp über der Raumtemperatur – der Verdichter läuft langsam an.')
+    start_offset_k: float = num(0.3, 'K', 0.1, 2, 0.1)
     # fine adjustment per step
-    step_k: float = num(0.2, 'Schrittweite Feinregelung', 'K', 0.1, 1, 0.1,
-                        'Kleine Schritte = feine Leistung: die Inverter-WP moduliert mit dem Abstand Ziel–Raum.')
+    step_k: float = num(0.2, 'K', 0.1, 1, 0.1)
     # at most one adjustment per this many minutes
-    adjust_every_min: float = num(10.0, 'Nachführen alle', 'min', 5, 60, 1)
+    adjust_every_min: float = num(10.0, 'min', 5, 60, 1)
     # still exporting this much -> step up
-    raise_export_w: float = num(300.0, 'Höher bei Einspeisung über', 'W', 0, 5000, 50)
+    raise_export_w: float = num(300.0, 'W', 0, 5000, 50)
     # drawing this much from grid/battery -> step down
-    lower_deficit_w: float = num(200.0, 'Tiefer bei Netz-/Batteriebezug über', 'W', 0, 5000, 50)
-    stop_deficit_w: float = num(300.0, 'Stopp bei Netz-/Batteriebezug über', 'W', 0, 5000, 50)
-    stop_delay_min: float = num(15.0, 'Stoppverzögerung', 'min', 0, 60, 1)
-    min_boost_min: float = num(30.0, 'Mindestdauer Anhebung', 'min', 0, 240, 5)
+    lower_deficit_w: float = num(200.0, 'W', 0, 5000, 50)
+    stop_deficit_w: float = num(300.0, 'W', 0, 5000, 50)
+    stop_delay_min: float = num(15.0, 'min', 0, 60, 1)
+    min_boost_min: float = num(30.0, 'min', 0, 240, 5)
     # True: also yield to PV hot water heating
-    dhw_first: bool = flag(False, 'Warmwasser zuerst',
-                           'Aus = Winter-Reihenfolge: erst Haus, dann Warmwasser (nur ein Bad hat immer Vorrang).')
-    min_write_interval_min: float = num(10.0, 'Min. Abstand zwischen Schreibvorgängen', 'min', 5, 120, 1)
-    max_writes_per_day: int = num(30, 'Max. Schreibvorgänge pro Tag', '', 1, 48, 1)
+    dhw_first: bool = flag(False)
+    min_write_interval_min: float = num(10.0, 'min', 5, 120, 1)
+    max_writes_per_day: int = num(30, '', 1, 48, 1)
 
     def validate(self) -> None:
         if not 10 <= self.room_min <= self.normal_temp <= self.room_max <= 30:
-            raise ValueError("Raumtemperaturen: 10 ≤ Minimum ≤ Normal ≤ Maximum ≤ 30 °C")
+            raise ValueError(t("heat.raumtemperaturen_10_minimum_normal"))
         if self.house_kwh_per_k <= 0:
-            raise ValueError("Speicherfähigkeit des Hauses muss positiv sein")
+            raise ValueError(t("heat.speicherfaehigkeit_des_hauses_muss"))
         if not 0.1 <= self.step_k <= 1:
-            raise ValueError("Schrittweite: 0,1 bis 1 K")
+            raise ValueError(t("heat.schrittweite_0_1_bis_1_k"))
 
 
 @dataclass
@@ -147,18 +131,18 @@ def buffer_target(inp: HeatingInputs, cfg: HeatingConfig) -> tuple[float, str]:
     """How warm the house may get with PV: the more free PV still comes today, the fuller the buffer."""
     span = cfg.room_max - cfg.normal_temp
     if span <= 0:
-        return cfg.normal_temp, "kein Puffer eingestellt"
+        return cfg.normal_temp, t("heat.kein_puffer_eingestellt")
     sit = inp.sit
     full_wh = span * cfg.house_kwh_per_k * 1000 / max(1.0, inp.cop)       # electricity for the whole span
     dull_tomorrow = sit.tomorrow_wh is not None and sit.tomorrow_wh < cfg.poor_day_kwh * 1000
     if dull_tomorrow:
-        share, why = 1.0, "morgen trüb – voller Puffer"
+        share, why = 1.0, t("heat.morgen_trueb_voller_puffer")
     elif sit.free_pv_today_wh is None:
-        share, why = 0.5, "keine Prognose – halber Puffer"
+        share, why = 0.5, t("heat.keine_prognose_halber_puffer")
     else:
         free = max(0.0, sit.free_pv_today_wh - sit.battery_need_wh)       # after the battery
         share = min(1.0, free / full_wh)
-        why = f"nach der Batterie noch {free / 1000:.1f} kWh PV frei, voller Puffer braucht {full_wh / 1000:.1f} kWh"
+        why = t("heat.nach_der_batterie_noch_kwh_pv", free_k=fnum(free / 1000, 1), full_kwh=fnum(full_wh / 1000, 1))
     return min(cfg.room_max, _r(cfg.normal_temp + max(0.3, span * share))), why
 
 
@@ -167,13 +151,12 @@ def battery_ok(inp: HeatingInputs, cfg: HeatingConfig) -> tuple[bool, str]:
     sit = inp.sit
     free, need = sit.free_pv_today_wh, sit.battery_need_wh
     if sit.soc >= cfg.soc_full:
-        return True, f"Batterie {sit.soc:.0f} % – voll"
+        return True, t("heat.batterie_voll", soc=fnum(sit.soc, 0))
     if sit.battery_fills(cfg.soc_full, cfg.battery_fill_safety):
-        return True, (f"Prognose: {free / 1000:.1f} kWh PV frei, Batterie braucht "
-                      f"{need / 1000:.1f} kWh – wird trotzdem voll")
-    return False, (f"Batterie {sit.soc:.0f} % wird heute nicht voll" +
-                   (f" (frei {free / 1000:.1f} kWh, braucht {need / 1000:.1f} kWh)"
-                    if free is not None else " (keine Prognose)"))
+        return True, (t("heat.prognose_kwh_pv_frei_batterie_braucht", free_k=fnum(free / 1000, 1), need_k=fnum(need / 1000, 1)))
+    return False, (t("heat.batterie_wird_heute_nicht_voll", soc=fnum(sit.soc, 0)) +
+                   (t("heat.frei_kwh_braucht_kwh", free_k=fnum(free / 1000, 1), need_k=fnum(need / 1000, 1))
+                    if free is not None else t("heat.keine_prognose")))
 
 
 PASSIVE = (HeatMode.NORMAL, HeatMode.SETBACK, HeatMode.HOLD)
@@ -192,14 +175,12 @@ def decide_heating(inp: HeatingInputs, cfg: HeatingConfig, prev: HeatState) -> t
             and prev.target is not None and prev.mode_since is not None and cfg.mode_min_min > 0):
         age = minutes_since(prev.mode_since, now)
         if age < cfg.mode_min_min:
-            tr.check("h_dwell", False, f"„{MODE_LABELS[prev.mode]}“ erst seit {age:.0f} von {cfg.mode_min_min:.0f} min "
-                                       f"– Wechsel zu „{MODE_LABELS[decision.mode]}“ wartet")
+            tr.check("h_dwell", False, t("heat.erst_seit_von_min_wechsel_zu", mode=mode_label(prev.mode), age=fnum(age, 0), mode_min_min=fnum(cfg.mode_min_min, 0), new_mode=mode_label(decision.mode)))
             kept = HeatState(prev.mode, prev.mode_since, state.start_since, state.stop_since, prev.target,
                              prev.adjusted_at)
-            reason = (f"{MODE_LABELS[prev.mode]} bleibt noch {cfg.mode_min_min - age:.0f} min "
-                      f"(dann: {decision.reasons[0]})")
+            reason = (t("heat.bleibt_noch_min_dann", mode=mode_label(prev.mode), mode_min_min=fnum(cfg.mode_min_min - age, 0), reason=decision.reasons[0]))
             return Decision(prev.mode, prev.target, [reason], decision.metrics, tr), kept
-    tr.check("h_dwell", True, "kein Wechsel" if decision.mode == prev.mode else "Wechsel erlaubt")
+    tr.check("h_dwell", True, t("heat.kein_wechsel") if decision.mode == prev.mode else t("heat.wechsel_erlaubt"))
     return decision, state
 
 
@@ -217,21 +198,21 @@ def _decide(inp: HeatingInputs, cfg: HeatingConfig, prev: HeatState) -> tuple[De
                "compressor_w": sit.compressor_w}
 
     def out(mode: HeatMode, target: float, reason: str, node: str, state: HeatState | None = None) -> tuple[Decision, HeatState]:
-        tr.check(node, True, f"Ziel {target:.1f} °C")
+        tr.check(node, True, t("heat.ziel_c", target=fnum(target, 1)))
         st = state or HeatState(mode, prev.mode_since if prev.mode == mode else now)
         st.target = target
         return Decision(mode, target, [reason], metrics, tr), st
 
-    if not tr.check("h_enabled", cfg.enabled, "PV-Heizen eingeschaltet" if cfg.enabled else "PV-Heizen ausgeschaltet"):
-        return out(HeatMode.OFF, normal, "PV-Heizen aus: normale Raumtemperatur", "h_out_normal")
+    if not tr.check("h_enabled", cfg.enabled, t("heat.pv_heizen_eingeschaltet") if cfg.enabled else t("heat.pv_heizen_ausgeschaltet")):
+        return out(HeatMode.OFF, normal, t("heat.pv_heizen_aus_normale_raumtemperatur"), "h_out_normal")
     in_season = prev.mode in SEASON_MODES                     # already heating-season behaviour: 1 K margin
     season_max = cfg.outside_max + (SEASON_MARGIN_K if in_season else 0.0)
     season = sit.outside_temp is not None and sit.outside_temp < season_max
-    tr.check("h_season", season, "keine Außentemperatur" if sit.outside_temp is None else
-             f"außen {sit.outside_temp:.1f} °C (Heizperiode unter {de(season_max)} °C"
-             + (", +1 K weil schon Heizbetrieb)" if in_season else ")"))
+    tr.check("h_season", season, t("heat.keine_aussentemperatur") if sit.outside_temp is None else
+             t("heat.aussen_c_heizperiode_unter_c", outside_temp=fnum(sit.outside_temp, 1), season_max=fnum(season_max))
+             + (t("heat.1_k_weil_schon_heizbetrieb") if in_season else ")"))
     if not season:
-        return out(HeatMode.NORMAL, normal, "Keine Heizperiode: normale Raumtemperatur", "h_out_normal")
+        return out(HeatMode.NORMAL, normal, t("heat.keine_heizperiode_normale_raumtemperatur"), "h_out_normal")
 
     yield_dhw = inp.dhw_mode == "bath" or (cfg.dhw_first and inp.dhw_mode in ("boost", "reheat"))
     room = sit.room_temp
@@ -242,59 +223,58 @@ def _decide(inp: HeatingInputs, cfg: HeatingConfig, prev: HeatState) -> tuple[De
     # ---- battery first: while PV produces and the battery won't fill, the house waits --------
     hold = cfg.battery_first and pv_now and not bat_ok
     tr.check("h_battery_first", hold if cfg.battery_first else None,
-             ("PV läuft, aber " + bat_why) if hold else (bat_why if pv_now else "kein PV gerade"))
+             (t("heat.pv_laeuft_aber") + bat_why) if hold else (bat_why if pv_now else t("heat.kein_pv_gerade")))
     if hold:
-        reason = f"Batterie zuerst: {bat_why} – kein Vorheizen, Haus bleibt bei {normal:.1f} °C"
+        reason = t("heat.batterie_zuerst_kein_vorheizen_haus", bat_why=bat_why, normal=fnum(normal, 1))
         return out(HeatMode.HOLD, normal, reason, "h_out_hold")
 
     # ---- preheating with PV: follow the surplus in small steps --------------------------------
     if tr.check("h_boosting", state.mode == HeatMode.BOOST,
-                f"Vorheizen läuft seit {minutes_since(state.mode_since, now):.0f} min, Ziel {state.target or 0:.1f} °C"
-                if state.mode == HeatMode.BOOST else "kein Vorheizen aktiv"):
-        if tr.check("h_dhw", yield_dhw, "Bad wird vorbereitet – hat Vorrang" if yield_dhw else "kein Vorrang für Warmwasser"):
-            return out(HeatMode.NORMAL, normal, "Bad hat Vorrang: Vorheizen beendet", "h_out_normal")
+                t("heat.vorheizen_laeuft_seit_min_ziel_c", minutes=fnum(minutes_since(state.mode_since, now), 0), value=fnum(state.target or 0, 1))
+                if state.mode == HeatMode.BOOST else t("heat.kein_vorheizen_aktiv")):
+        if tr.check("h_dhw", yield_dhw, t("heat.bad_wird_vorbereitet_hat_vorrang") if yield_dhw else t("heat.kein_vorrang_fuer_warmwasser")):
+            return out(HeatMode.NORMAL, normal, t("heat.bad_hat_vorrang_vorheizen_beendet"), "h_out_normal")
         warm = room is not None and room >= cap
-        if tr.check("h_room_warm", warm, f"Raum {room:.1f} °C, Puffer bis {cap:.1f} °C" if room is not None else "keine Raumtemperatur"):
-            return out(HeatMode.NORMAL, normal, f"Puffer voll ({room:.1f} °C) – Wärme ist gespeichert", "h_out_normal")
+        if tr.check("h_room_warm", warm, t("heat.raum_c_puffer_bis_c", room=fnum(room, 1), cap=fnum(cap, 1)) if room is not None else t("heat.keine_raumtemperatur")):
+            return out(HeatMode.NORMAL, normal, t("heat.puffer_voll_c_waerme_ist_gespeichert", room=fnum(room, 1)), "h_out_normal")
         stop = state.track_stop(deficit_w, cfg.stop_deficit_w, now, cfg.stop_delay_min, cfg.min_boost_min)
-        tr.check("h_deficit", stop, f"Defizit {deficit_w:.0f} W seit {minutes_since(state.stop_since, now):.0f} von "
-                 f"{cfg.stop_delay_min:.0f} min (Vorheizen mind. {cfg.min_boost_min:.0f} min)")
+        tr.check("h_deficit", stop, t("heat.defizit_w_seit_von_min_vorheizen", deficit_w=fnum(deficit_w, 0), minutes=fnum(minutes_since(state.stop_since, now), 0), stop_delay_min=fnum(cfg.stop_delay_min, 0), min_boost_min=fnum(cfg.min_boost_min, 0)))
         if not stop:
             target = state.target if state.target is not None else _r((room or normal) + cfg.start_offset_k)
-            step_note = "Ziel gehalten"
+            step_note, moved = t("heat.ziel_gehalten"), False
             if state.adjusted_at is None or held(state.adjusted_at, now, cfg.adjust_every_min):
                 if deficit_w >= cfg.lower_deficit_w:
-                    target, step_note = _r(target - cfg.step_k), f"−{cfg.step_k:.1f} K (Bezug {deficit_w:.0f} W)"
+                    target, step_note, moved = _r(target - cfg.step_k), t("heat.k_bezug_w", step_k=fnum(cfg.step_k, 1), deficit_w=fnum(deficit_w, 0)), True
                 elif export_w >= cfg.raise_export_w or (bat_ok and usable_w >= cfg.raise_export_w):
-                    target, step_note = _r(target + cfg.step_k), f"+{cfg.step_k:.1f} K (noch {usable_w:.0f} W frei)"
-                if step_note != "Ziel gehalten":
+                    target, step_note, moved = _r(target + cfg.step_k), t("heat.k_noch_w_frei", step_k=fnum(cfg.step_k, 1), usable_w=fnum(usable_w, 0)), True
+                if moved:
                     state.adjusted_at = now
             floor = max(lowered, _r((room or normal) - 0.2))
             target = min(cap, max(floor, target))
-            comp = f", Verdichter {sit.compressor_w:.0f} W" if sit.compressor_w is not None else ""
-            tr.check("h_adjust", True, f"{step_note}{comp}")
-            return out(HeatMode.BOOST, target, f"Vorheizen mit PV: Ziel {target:.1f} °C ({step_note})", "h_out_boost", state)
+            tr.check("h_adjust", True, step_note if sit.compressor_w is None else
+                     t("heat.step_with_compressor", step_note=step_note, compressor_w=fnum(sit.compressor_w, 0)))
+            return out(HeatMode.BOOST, target, t("heat.vorheizen_mit_pv_ziel_c", target=fnum(target, 1), step_note=step_note), "h_out_boost", state)
         state = HeatState(HeatMode.NORMAL, now)        # surplus gone: fall through to setback/normal
     else:
         # ---- start? -------------------------------------------------------------------------
         ok_surplus = tr.check("h_surplus", usable_w >= cfg.start_surplus_w,
-                              f"{usable_w:.0f} W frei für das Haus (Schwelle {cfg.start_surplus_w:.0f} W)")
+                              t("heat.w_frei_fuer_das_haus_schwelle", usable_w=fnum(usable_w, 0), start_surplus_w=fnum(cfg.start_surplus_w, 0)))
         ok_battery = tr.check("h_battery", bat_ok or not cfg.battery_first, bat_why)
-        ok_dhw = tr.check("h_dhw", not yield_dhw, "Bad wird vorbereitet – hat Vorrang" if yield_dhw
-                          else "kein Vorrang für Warmwasser")
+        ok_dhw = tr.check("h_dhw", not yield_dhw, t("heat.bad_wird_vorbereitet_hat_vorrang") if yield_dhw
+                          else t("heat.kein_vorrang_fuer_warmwasser"))
         ok_room = tr.check("h_room", room is None or room < cap - 0.2,
-                           f"Raum {room:.1f} °C, Puffer bis {cap:.1f} °C" if room is not None else "keine Raumtemperatur")
+                           t("heat.raum_c_puffer_bis_c", room=fnum(room, 1), cap=fnum(cap, 1)) if room is not None else t("heat.keine_raumtemperatur"))
         start_now = ok_surplus and ok_battery and ok_dhw and ok_room
         started = state.track_start(start_now, now, cfg.start_delay_min)
         tr.check("h_held", started if start_now else None,
-                 f"erfüllt seit {minutes_since(state.start_since, now):.0f} von {cfg.start_delay_min:.0f} min" if start_now
-                 else "nicht geprüft")
+                 t("heat.erfuellt_seit_von_min", minutes=fnum(minutes_since(state.start_since, now), 0), start_delay_min=fnum(cfg.start_delay_min, 0)) if start_now
+                 else t("heat.nicht_geprueft"))
         if started:
             target = min(cap, _r((room if room is not None else normal) + cfg.start_offset_k))
-            return out(HeatMode.BOOST, target, f"PV übrig ({usable_w:.0f} W): Vorheizen startet sanft mit {target:.1f} °C",
+            return out(HeatMode.BOOST, target, t("heat.pv_uebrig_w_vorheizen_startet_sanft", usable_w=fnum(usable_w, 0), target=fnum(target, 1)),
                        "h_out_boost", HeatState(HeatMode.BOOST, now, adjusted_at=now))
         if start_now:
-            return _keep(out(HeatMode.NORMAL, normal, f"{usable_w:.0f} W frei – Vorheizen nach {cfg.start_delay_min:.0f} min",
+            return _keep(out(HeatMode.NORMAL, normal, t("heat.w_frei_vorheizen_nach_min", usable_w=fnum(usable_w, 0), start_delay_min=fnum(cfg.start_delay_min, 0)),
                              "h_out_normal"), state)
 
     # ---- no PV heat now: let the stored heat carry the house until the next sun ----------------
@@ -303,17 +283,17 @@ def _decide(inp: HeatingInputs, cfg: HeatingConfig, prev: HeatState) -> tuple[De
     good_from = cfg.poor_day_kwh * (TOMORROW_KEEP if prev.mode == HeatMode.SETBACK else 1.0)   # forecast wobbles
     sun_tomorrow = tomorrow_wh is not None and tomorrow_wh >= good_from * 1000
     if sun_left is None:
-        tr.check("h_sun_coming", None, "keine Prognose – keine Absenkung")
-        return _keep(out(HeatMode.NORMAL, normal, "Normale Raumtemperatur (keine Prognose)", "h_out_normal"), state)
+        tr.check("h_sun_coming", None, t("heat.keine_prognose_keine_absenkung"))
+        return _keep(out(HeatMode.NORMAL, normal, t("heat.normale_raumtemperatur_keine_prognose"), "h_out_normal"), state)
     coming = not pv_now and (sun_later_today or (sun_left < 1 and sun_tomorrow))
     tr.check("h_sun_coming", coming,
-             "PV liefert gerade" if pv_now else
-             (f"heute noch {sun_left:.1f} Sonnenstunden" if sun_later_today else
-              f"morgen {tomorrow_wh / 1000:.1f} kWh PV (gut ab {de(good_from)} kWh)"))
+             t("heat.pv_liefert_gerade") if pv_now else
+             (t("heat.heute_noch_sonnenstunden", sun_left=fnum(sun_left, 1)) if sun_later_today else
+              t("heat.morgen_kwh_pv_gut_ab_kwh", tomorrow_kwh=fnum(tomorrow_wh / 1000, 1), good_from=fnum(good_from))))
     if coming and lowered < normal:
-        return _keep(out(HeatMode.SETBACK, lowered, f"Wärme aus dem Haus reicht bis zur Sonne: Raumziel {lowered:.1f} °C",
+        return _keep(out(HeatMode.SETBACK, lowered, t("heat.waerme_aus_dem_haus_reicht_bis", lowered=fnum(lowered, 1)),
                          "h_out_setback"), state)
-    return _keep(out(HeatMode.NORMAL, normal, "Normale Raumtemperatur", "h_out_normal"), state)
+    return _keep(out(HeatMode.NORMAL, normal, t("heat.normale_raumtemperatur"), "h_out_normal"), state)
 
 
 def _keep(result: tuple[Decision, HeatState], state: HeatState) -> tuple[Decision, HeatState]:
@@ -324,65 +304,61 @@ def _keep(result: tuple[Decision, HeatState], state: HeatState) -> tuple[Decisio
 
 
 # ---- explanation: the steps above, in the order decide_heating() checks them ----------------
-OUTCOMES = {"h_out_hold": "Batterie zuerst – normale Raumtemperatur", "h_out_boost": "Haus vorheizen",
-            "h_out_setback": "Absenkung – Sonne kommt", "h_out_normal": "Normale Raumtemperatur"}
-OFF_TEXT = "PV-Heizen ist ausgeschaltet: die normale Raumtemperatur gilt."
-MODE_LABELS = {  # how the pages name each mode
-    HeatMode.BOOST: "Haus vorheizen (PV)", HeatMode.HOLD: "Batterie zuerst", HeatMode.SETBACK: "Absenkung – Sonne kommt",
-    HeatMode.NORMAL: "Normale Raumtemperatur", HeatMode.OFF: "Aus",
-}
+OUTCOMES = ('h_out_hold', 'h_out_boost', 'h_out_setback', 'h_out_normal')   # trace nodes that end a decision: texts "heat.outcome.<node>"
+
+
+def outcome_texts() -> dict[str, str]:
+    return {node: t(f"heat.outcome.{node}") for node in OUTCOMES}
+
+
+def off_text() -> str:
+    return t("heat.off")
+
+
+def mode_label(mode: HeatMode) -> str:
+    """How the pages name each mode (text "heat.mode.<mode>")."""
+    return t(f"heat.mode.{mode.value}")
 
 
 def stages(h: HeatingConfig) -> list[dict]:
     """The steps of decide_heating() with their questions, for the explanation tab."""
     return [
-        stage("season", "h_season", "Ist Heizperiode?", "house",
-              "PV-Heizen lohnt nur, wenn das Haus ohnehin Wärme braucht.",
-              [("h_season", "Ist es draußen kalt genug?", f"Außentemperatur unter {de(h.outside_max, 0)} °C.")],
-              gate_no="ja → weiter"),
-        stage("h_battery_first", "h_battery_first", "Batterie zuerst?", "battery",
-              "Tagsüber soll erst die Batterie voll werden. Schafft sie das heute nicht, wird nicht vorgeheizt: das Haus "
-              f"bleibt bei der normalen Raumtemperatur ({de(h.normal_temp)} °C) und nimmt der Batterie keinen PV-Strom "
-              "für zusätzliche Wärme weg.",
-              [("h_battery_first", "Läuft PV und wird die Batterie heute nicht voll?",
-                f"Voll ab {de(h.soc_full, 0)} %; die Prognose muss den Bedarf {de(h.battery_fill_safety, 1)}-fach decken.")],
-              gate="h_battery_first", gate_no="nein → weiter"),
-        stage("h_boosting", "h_boosting", "Wird gerade vorgeheizt?", "pv",
-              "Ein laufendes Vorheizen endet erst, wenn es nicht mehr sinnvoll ist.", [
-                  ("h_dhw", "Wird ein Bad vorbereitet?", "Das Bad braucht die Wärmepumpe für Warmwasser."),
-                  ("h_room_warm", "Ist der Puffer voll?", f"Höchstens {de(h.room_max)} °C – je nach Sonne auch früher."),
-                  ("h_deficit", "Kommt zu lange Strom aus Netz/Batterie?",
-                   f"Über {de(h.stop_deficit_w, 0)} W für {de(h.stop_delay_min, 0)} min "
-                   f"(nach mind. {de(h.min_boost_min, 0)} min)."),
-                  ("h_adjust", "Feinregelung",
-                   f"Alle {de(h.adjust_every_min, 0)} min ±{de(h.step_k, 1)} K: höher bei über {de(h.raise_export_w, 0)} W "
-                   f"Einspeisung, tiefer bei über {de(h.lower_deficit_w, 0)} W Bezug. Die Inverter-WP moduliert ihre "
-                   "Leistung mit dem Abstand Ziel–Raum."),
-              ], gate="h_boosting", gate_no="nein → weiter"),
-        stage("h_start", "h_surplus", "Vorheizen starten?", "heatpump",
-              f"„Raumtemp. Tag“ (HK1, Fußbodenheizung) wird sanft angehoben: zuerst nur {de(h.start_offset_k, 1)} K über "
-              "die Raumtemperatur, dann in kleinen Schritten dem Überschuss nach – höchstens bis zum Pufferziel (je mehr "
-              f"Sonne nach der Batterie übrig ist, desto höher, bis {de(h.room_max)} °C). Estrich und Bodenplatte "
-              "speichern die Wärme.", [
-                  ("h_surplus", "Genug Überschuss?",
-                   f"Mindestens {de(h.start_surplus_w, 0)} W gehen ins Netz oder in die Batterie."),
-                  ("h_battery", "Wird die Batterie heute voll?",
-                   f"Ab {de(h.soc_full, 0)} % oder sicher laut Prognose – sonst zählt nur Einspeisung."),
-                  ("h_dhw", "Kein Bad in Vorbereitung?", "Nur ein Bad hat Vorrang."),
-                  ("h_room", "Ist im Puffer noch Platz?",
-                   f"Raum mindestens 0,3 K unter dem Pufferziel (höchstens {de(h.room_max)} °C)."),
-                  ("h_held", "Hält das schon eine Weile an?", f"{de(h.start_delay_min, 0)} min am Stück."),
+        stage("season", "h_season", t("heat.ist_heizperiode"), "house",
+              t("heat.pv_heizen_lohnt_nur_wenn_das"),
+              [("h_season", t("heat.ist_es_draussen_kalt_genug"), t("heat.aussentemperatur_unter_c", outside_max=fnum(h.outside_max, 0)))],
+              gate_no=t("heat.ja_weiter")),
+        stage("h_battery_first", "h_battery_first", t("heat.batterie_zuerst"), "battery",
+              t("heat.tagsueber_soll_erst_die_batterie_voll", normal_temp=fnum(h.normal_temp)),
+              [("h_battery_first", t("heat.laeuft_pv_und_wird_die_batterie"),
+                t("heat.voll_ab_die_prognose_muss_den", soc_full=fnum(h.soc_full, 0), battery_fill_safety=fnum(h.battery_fill_safety, 1)))],
+              gate="h_battery_first", gate_no=t("heat.nein_weiter")),
+        stage("h_boosting", "h_boosting", t("heat.wird_gerade_vorgeheizt"), "pv",
+              t("heat.ein_laufendes_vorheizen_endet_erst_wenn"), [
+                  ("h_dhw", t("heat.wird_ein_bad_vorbereitet"), t("heat.das_bad_braucht_die_waermepumpe_fuer")),
+                  ("h_room_warm", t("heat.ist_der_puffer_voll"), t("heat.hoechstens_c_je_nach_sonne_auch", room_max=fnum(h.room_max))),
+                  ("h_deficit", t("heat.kommt_zu_lange_strom_aus_netz"),
+                   t("heat.ueber_w_fuer_min_nach_mind", stop_deficit_w=fnum(h.stop_deficit_w, 0), stop_delay_min=fnum(h.stop_delay_min, 0), min_boost_min=fnum(h.min_boost_min, 0))),
+                  ("h_adjust", t("heat.feinregelung"),
+                   t("heat.alle_min_k_hoeher_bei_ueber", adjust_every_min=fnum(h.adjust_every_min, 0), step_k=fnum(h.step_k, 1), raise_export_w=fnum(h.raise_export_w, 0), lower_deficit_w=fnum(h.lower_deficit_w, 0))),
+              ], gate="h_boosting", gate_no=t("heat.nein_weiter")),
+        stage("h_start", "h_surplus", t("heat.vorheizen_starten"), "heatpump",
+              t("heat.raumtemp_tag_hk1_fussbodenheizung_wird", start_offset_k=fnum(h.start_offset_k, 1), room_max=fnum(h.room_max)), [
+                  ("h_surplus", t("heat.genug_ueberschuss"),
+                   t("heat.mindestens_w_gehen_ins_netz_oder", start_surplus_w=fnum(h.start_surplus_w, 0))),
+                  ("h_battery", t("heat.wird_die_batterie_heute_voll"),
+                   t("heat.ab_oder_sicher_laut_prognose_sonst", soc_full=fnum(h.soc_full, 0))),
+                  ("h_dhw", t("heat.kein_bad_in_vorbereitung"), t("heat.nur_ein_bad_hat_vorrang")),
+                  ("h_room", t("heat.ist_im_puffer_noch_platz"),
+                   t("heat.raum_mindestens_0_3_k_unter", room_max=fnum(h.room_max))),
+                  ("h_held", t("heat.haelt_das_schon_eine_weile_an"), t("heat.min_am_stueck", start_delay_min=fnum(h.start_delay_min, 0))),
               ], all_needed=True),
-        stage("h_setback", "h_sun_coming", "Ohne PV: reicht die gespeicherte Wärme?", "battery",
-              f"Kommt bald Sonne, darf es abends und nachts bis {de(h.room_min)} °C abkühlen – die Wärmepumpe heizt "
-              "dann nicht aus Batterie oder Netz.",
-              [("h_sun_coming", "Kommt Sonne (später heute oder morgen)?",
-                f"Morgen gut ab {de(h.poor_day_kwh, 0)} kWh Prognose.")],
-              fallback=f"Sonst: normale Raumtemperatur {de(h.normal_temp)} °C."),
-        stage("h_dwell", "h_dwell", "Nicht zu schnell wechseln", "house",
-              "Wolken, eine schwankende Prognose oder 15 °C draußen sollen das Ziel nicht ständig zwischen "
-              f"{de(h.room_min)} und {de(h.normal_temp)} °C hin- und herschalten.",
-              [("h_dwell", "Läuft die jetzige Betriebsart lange genug?",
-                f"Normal, Absenkung und Batterie zuerst wechseln frühestens nach {de(h.mode_min_min, 0)} min; "
-                "Vorheizen und Bad warten nie.")]),
+        stage("h_setback", "h_sun_coming", t("heat.ohne_pv_reicht_die_gespeicherte_waerme"), "battery",
+              t("heat.kommt_bald_sonne_darf_es_abends", room_min=fnum(h.room_min)),
+              [("h_sun_coming", t("heat.kommt_sonne_spaeter_heute_oder_morgen"),
+                t("heat.morgen_gut_ab_kwh_prognose", poor_day_kwh=fnum(h.poor_day_kwh, 0)))],
+              fallback=t("heat.sonst_normale_raumtemperatur_c", normal_temp=fnum(h.normal_temp))),
+        stage("h_dwell", "h_dwell", t("heat.nicht_zu_schnell_wechseln"), "house",
+              t("heat.wolken_eine_schwankende_prognose_oder_15", room_min=fnum(h.room_min), normal_temp=fnum(h.normal_temp)),
+              [("h_dwell", t("heat.laeuft_die_jetzige_betriebsart_lange"),
+                t("heat.normal_absenkung_und_batterie_zuerst", mode_min_min=fnum(h.mode_min_min, 0)))]),
     ]

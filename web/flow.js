@@ -1,5 +1,6 @@
 // Energy-flow diagram: lays out the site topology (from /api/state → flow) as a
 // top-down tree and animates each connection in the direction power flows.
+import { t } from "./i18n.js";
 import { el, power } from "./lib.js";
 import { icon } from "./icons.js";
 
@@ -9,7 +10,7 @@ const svgEl = (tag, attrs = {}) => {
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
   return n;
 };
-const text = (attrs, content) => { const t = svgEl("text", attrs); t.textContent = content; return t; };
+const text = (attrs, content) => { const node = svgEl("text", attrs); node.textContent = content; return node; };
 
 const NODE_W = 176, NODE_H = 100, COL_GAP = 22, ROW_GAP = 46;
 // role colours: producers blue, consumers orange (see style.css)
@@ -43,7 +44,7 @@ function layout(nodes) {
 export function renderFlow(container, flow) {
   container.replaceChildren();
   if (!flow || !flow.nodes.length) {
-    container.append(el("div", { class: "empty" }, "Keine Topologie verfügbar."));
+    container.append(el("div", { class: "empty" }, t("web.flow.keine_topologie_verfuegbar")));
     return;
   }
   const { byId, width, height } = layout(flow.nodes);
@@ -53,7 +54,7 @@ export function renderFlow(container, flow) {
   const svg = svgEl("svg", {
     viewBox: `${-pad} ${-pad} ${width + 2 * pad} ${height + 2 * pad}`,
     width: ((width + 2 * pad) * scale).toFixed(0), height: ((height + 2 * pad) * scale).toFixed(0), role: "img",
-    "aria-label": "Energiefluss zwischen Netz, Wechselrichter, Batterie, Ladepunkt und Haus",
+    "aria-label": t("web.flow.energiefluss_zwischen_netz"),
   });
 
   const maxW = Math.max(500, ...flow.edges.map((e) => e.w || 0));
@@ -98,7 +99,7 @@ export function renderFlow(container, flow) {
     g.append(text({ class: "flow-title", x: 38, y: 25 }, label));
     const value = n.power_w === null ? "–" : (() => { const p = power(Math.abs(n.power_w)); return `${p.v} ${p.u}`; })();
     const unmetered = n.kind === "heatpump" && n.power_w === null;
-    g.append(text({ class: `flow-value${unmetered ? " muted" : ""}`, x: 12, y: 54 }, unmetered ? "Messung startet" : value));
+    g.append(text({ class: `flow-value${unmetered ? " muted" : ""}`, x: 12, y: 54 }, unmetered ? t("web.flow.messung_startet") : value));
     n.details.slice(0, 2).forEach((detail, k) =>
       g.append(text({ class: "flow-detail", x: 12, y: 76 + k * 14 }, detail.length > 31 ? `${detail.slice(0, 30)}…` : detail)));
     const title = svgEl("title");
@@ -126,7 +127,7 @@ export function renderBalance(container, balance) {
       el("i", { style: `background:var(${palette[it.kind] || "--text-muted"})` }), it.label, " ", el("b", {}, fmtW(it.w)))));
     return el("div", { class: "bal-row" }, el("div", { class: "bal-title" }, `${mark} ${title}`), bar, list);
   };
-  container.append(row("Erzeugung", "▲", balance.sources, SOURCE_COLOR), row("Verbrauch", "▼", balance.sinks, SINK_COLOR));
+  container.append(row(t("web.flow.erzeugung"), "▲", balance.sources, SOURCE_COLOR), row(t("web.flow.verbrauch"), "▼", balance.sinks, SINK_COLOR));
 }
 
 function fmtW(w) {

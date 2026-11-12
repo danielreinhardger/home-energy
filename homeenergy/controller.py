@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 from typing import Any, Callable
 
+from .i18n import fnum, t
 from .device import ModbusDevice
 from .heating import HeatState, decide_heating
 from .hotwater import DhwState, decide
@@ -32,11 +33,14 @@ from .settings import num
 
 log = logging.getLogger(__name__)
 
+# a controller entry's "outcome": the language-free part of its action text
+WRITTEN, FAILED = "written", "failed"
+
 
 @dataclass
 class WriteLimits:
-    min_write_interval_min: float = num(10.0, 'Min. Abstand zwischen Schreibvorgängen', 'min', 1, 120, 1)
-    max_writes_per_day: int = num(24, 'Max. Schreibvorgänge pro Tag', '', 1, 200, 1)
+    min_write_interval_min: float = num(10.0, 'min', 1, 120, 1)
+    max_writes_per_day: int = num(24, '', 1, 200, 1)
 
 
 @dataclass
@@ -91,19 +95,20 @@ class SetpointController:
         with self._lock:
             decision, self.state.strategy = self.decide(inp, cfg, self.state.strategy)
             target = self._round(decision.target)
-            action = self._act(inp.now, cfg, decision, target, current_target)
+            action, outcome = self._act(inp.now, cfg, decision, target, current_target)
             entry = {"time": inp.now.isoformat(timespec="seconds"), **decision.to_json(),
                      "target": target, "device_target": current_target, "action": action,
-                     "dry_run": not cfg.apply}
+                     "outcome": outcome, "dry_run": not cfg.apply}
             if self.last is None or (entry["mode"], entry["target"], entry["action"]) != (
-                    self.last["mode"], self.last["target"], self.last["action"]) or action.startswith("geschrieben"):
+                    self.last["mode"], self.last["target"], self.last["action"]) or outcome == WRITTEN:
                 self.recent.appendleft(entry)
                 self._append_log(entry)
             self.last = entry
             return entry
 
     def _act(self, now: datetime, cfg: Any, decision: Decision, target: float,
-             current: float | None) -> str:
+             current: float | None) -> tuple[str, str]:
+        """(what happened, as text; outcome code: WRITTEN, FAILED or "")."""
         if not cfg.enabled or not cfg.apply:
             restore = self._round(self.restore_value(cfg))
             if (self._was_live and self.state.needs_restore and current is not None
@@ -112,13 +117,13 @@ class SetpointController:
                 return self._write(now, restore, restore=True)
             self._was_live = False
             self.state.needs_restore = False
-            return "Regelung aus" if not cfg.enabled else "Testbetrieb: nicht geschrieben"
+            return (t("ctl.regelung_aus") if not cfg.enabled else t("ctl.testbetrieb_nicht_geschrieben")), ""
         self._was_live = True
         if current is not None and abs(current - target) < self._step / 2:
-            return "unverändert"
+            return t("ctl.unveraendert"), ""
         limited = self._rate_limited(now)
         if limited:
-            return limited
+            return limited, ""
         return self._write(now, target)
 
     def _rate_limited(self, now: datetime) -> str:
@@ -126,25 +131,25 @@ class SetpointController:
         if self.state.writes_day != day:
             self.state.writes_day, self.state.writes_today = day, 0
         if self.state.writes_today >= self.limits.max_writes_per_day:
-            return f"Tageslimit erreicht ({self.limits.max_writes_per_day} Schreibvorgänge)"
+            return t("ctl.tageslimit_erreicht_schreibvorgaenge", max_writes_per_day=self.limits.max_writes_per_day)
         if self.state.last_write_at and now - self.state.last_write_at < timedelta(
                 minutes=self.limits.min_write_interval_min):
-            return f"wartet (max. 1 Schreibvorgang je {self.limits.min_write_interval_min:.0f} min)"
+            return t("ctl.wartet_max_1_schreibvorgang_je_min", min_write_interval_min=fnum(self.limits.min_write_interval_min, 0))
         return ""
 
-    def _write(self, now: datetime, value: float, restore: bool = False) -> str:
+    def _write(self, now: datetime, value: float, restore: bool = False) -> tuple[str, str]:
         try:
             back = self.heat_pump.write_setting(self.SETTING, value)
         except Exception as exc:  # device errors must not kill the loop
             log.warning("writing %s failed: %s", self.SETTING, exc)
-            return f"Fehler beim Schreiben: {exc}"
+            return t("ctl.fehler_beim_schreiben", exc=exc), FAILED
         day = now.date().isoformat()
         if self.state.writes_day != day:
             self.state.writes_day, self.state.writes_today = day, 0
         self.state.writes_today += 1
         self.state.last_write_at = now
         self.state.needs_restore = not restore
-        return f"geschrieben: {back:.1f} °C" + (" (Normalwert wiederhergestellt)" if restore else "")
+        return t("ctl.written_restored" if restore else "ctl.written", value=fnum(back, 1)), WRITTEN
 
     def _round(self, value: float) -> float:
         return round(round(value / self._step) * self._step, 2)

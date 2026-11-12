@@ -9,16 +9,16 @@ DAY = datetime(2026, 11, 8, tzinfo=TZ)
 
 class PhaseTests(unittest.TestCase):
     def test_phase_at(self):
-        self.assertEqual(phase_at(DAY.replace(hour=17, minute=40))[0], "Nachmittag")
-        self.assertEqual(phase_at(DAY.replace(hour=18))[0], "Abend")
-        self.assertEqual(phase_at(DAY.replace(hour=23))[0], "Nacht")
-        self.assertEqual(phase_at(DAY.replace(hour=3))[0], "Nacht")
+        self.assertEqual(phase_at(DAY.replace(hour=17, minute=40))[0], "afternoon")
+        self.assertEqual(phase_at(DAY.replace(hour=18))[0], "evening")
+        self.assertEqual(phase_at(DAY.replace(hour=23))[0], "night")
+        self.assertEqual(phase_at(DAY.replace(hour=3))[0], "night")
 
     def test_next_phase_skips_the_midnight_split(self):
         name, start, _ = next_phase(DAY.replace(hour=23, minute=10))
-        self.assertEqual((name, start), ("Morgen", DAY.replace(hour=6) + timedelta(days=1)))
+        self.assertEqual((name, start), ("morning", DAY.replace(hour=6) + timedelta(days=1)))
         name, start, _ = next_phase(DAY.replace(hour=17, minute=40))
-        self.assertEqual((name, start.hour), ("Abend", 18))
+        self.assertEqual((name, start.hour), ("evening", 18))
 
     def test_today_card_shows_now_and_next_with_night_flag(self):
         now = DAY.replace(hour=17, minute=40)

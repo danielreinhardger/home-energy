@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .modbus import ModbusTcpClient
-from .registers import DeviceSpec, Point, Setting, plan_blocks
+from . import i18n
+from .registers import DeviceSpec, Point, Setting, device_name, plan_blocks, setting_label
 
 
 @dataclass
@@ -48,19 +49,20 @@ class ModbusDevice:
         try:
             return self._settings[key]
         except KeyError:
-            raise KeyError(f"{self.spec.name}: keine Einstellung '{key}'") from None
+            raise KeyError(i18n.t("device.error.no_setting", device=device_name(self.spec.key), key=key)) from None
 
     def write_setting(self, key: str, value: float) -> Any:
         """Validate, write and read back one setting. Returns the value read back."""
         s = self.setting(key)
+        label = setting_label(self.spec.key, key)
         if not s.writable:
-            raise PermissionError(f"{s.label}: Register nicht bestätigt, nur Anzeige")
-        raw = s.encode(value)
+            raise PermissionError(i18n.t("device.error.read_only", label=label))
+        raw = s.encode(value, label)
         address = self.spec.address(s.register)
         self.client.write_single(address, raw)
         back = self.client.read_holding(address, 1)[0]
         if back != raw:
-            raise IOError(f"{s.label}: {raw} geschrieben, Gerät meldet {back}")
+            raise IOError(i18n.t("device.error.read_back", label=label, written=raw, back=back))
         return s.decode(back)
 
     def point(self, key: str) -> Point:

@@ -1,5 +1,6 @@
 // Small SVG charts: multi-series line chart with crosshair tooltip, and a bar chart.
 // One y-axis per chart; series colors come from CSS variables (--series-N).
+import { locale, t } from "./i18n.js";
 import { el, fmt, time, dayTime, dateTime } from "./lib.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -16,7 +17,7 @@ const tooltip = () => document.getElementById("tooltip");
  */
 export function timeTicks(x0, x1) {
   const spanH = (x1 - x0) / 3.6e6, out = [];
-  const wd = (d) => d.toLocaleDateString("de-DE", { weekday: "short" });
+  const wd = (d) => d.toLocaleDateString(locale(), { weekday: "short" });
   if (spanH <= 50) {
     const stepH = spanH <= 4 ? 1 : spanH <= 13 ? 2 : 6;
     const d = new Date(x0); d.setMinutes(0, 0, 0);
@@ -39,7 +40,7 @@ export function timeTicks(x0, x1) {
     const every = spanH > 24 * 400 ? 3 : 1;
     for (; d.getTime() <= x1; d.setMonth(d.getMonth() + 1)) {
       if (d.getMonth() % every) continue;
-      const m = d.toLocaleDateString("de-DE", { month: "short" });
+      const m = d.toLocaleDateString(locale(), { month: "short" });
       out.push({ t: d.getTime(), label: d.getMonth() === 0 ? `${m} ${String(d.getFullYear()).slice(2)}` : m });
     }
   }
@@ -82,7 +83,7 @@ export function lineChart(container, data, series, { unit = "", digits = 0, yMin
   refLines = [] } = {}) {
   container.replaceChildren();
   if (!data.length) {
-    container.append(el("div", { class: "empty" }, "Noch keine Daten – Verlauf füllt sich minütlich."));
+    container.append(el("div", { class: "empty" }, t("web.charts.noch_keine_daten_verlauf_fuellt_sich")));
     return;
   }
   const W = container.clientWidth || 600, H = container.clientHeight || 260;
@@ -101,9 +102,9 @@ export function lineChart(container, data, series, { unit = "", digits = 0, yMin
   const axis = svgEl("g", { class: "axis" });
   for (const v of ticks) {
     axis.append(svgEl("line", { class: v === 0 && y0 < 0 ? "zero" : "gridline", x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }));
-    const t = svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" });
-    t.textContent = fmt(v, Math.abs(y1 - y0) < 5 ? 1 : 0);
-    axis.append(t);
+    const label = svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" });
+    label.textContent = fmt(v, Math.abs(y1 - y0) < 5 ? 1 : 0);
+    axis.append(label);
   }
   for (const { t, label } of timeTicks(x0, x1)) {
     const text = svgEl("text", { x: X(t), y: H - 4, "text-anchor": "middle" });
@@ -136,9 +137,9 @@ export function lineChart(container, data, series, { unit = "", digits = 0, yMin
   ends.sort((a, b) => a.y - b.y);
   for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
   for (const e of ends) {
-    const t = svgEl("text", { class: "endlabel", x: W - m.r + 6, y: e.y + 4 });
-    t.textContent = e.s.label;
-    svg.append(t);
+    const label = svgEl("text", { class: "endlabel", x: W - m.r + 6, y: e.y + 4 });
+    label.textContent = e.s.label;
+    svg.append(label);
   }
 
   // hover layer: crosshair snaps to the nearest sample, tooltip lists every series
@@ -158,9 +159,9 @@ export function lineChart(container, data, series, { unit = "", digits = 0, yMin
   };
   const nearest = (clientX) => {
     const r = svg.getBoundingClientRect();
-    const t = x0 + ((clientX - r.left) * (W / r.width) - m.l) / (W - m.l - m.r) * (x1 - x0);
+    const at = x0 + ((clientX - r.left) * (W / r.width) - m.l) / (W - m.l - m.r) * (x1 - x0);
     let best = 0;
-    xs.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(xs[best] - t)) best = i; });
+    xs.forEach((x, i) => { if (Math.abs(x - at) < Math.abs(xs[best] - at)) best = i; });
     return best;
   };
   let focusIdx = data.length - 1;
@@ -187,22 +188,22 @@ export function barChart(container, bars, now) {
   const top = ticks[ticks.length - 1];
   const bw = (W - m.l - m.r) / bars.length;
   const Y = (v) => m.t + (1 - v / top) * (H - m.t - m.b);
-  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "PV-Prognose je Stunde" });
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": t("web.charts.pv_prognose_je_stunde") });
   const axis = svgEl("g", { class: "axis" });
   for (const v of ticks) {
     axis.append(svgEl("line", { class: "gridline", x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }));
-    const t = svgEl("text", { x: m.l - 5, y: Y(v) + 4, "text-anchor": "end" });
-    t.textContent = fmt(v, top < 2 ? 1 : 0);
-    axis.append(t);
+    const label = svgEl("text", { x: m.l - 5, y: Y(v) + 4, "text-anchor": "end" });
+    label.textContent = fmt(v, top < 2 ? 1 : 0);
+    axis.append(label);
   }
   svg.append(axis);
   const nowT = now.getTime();
   bars.forEach((b, i) => {
     const start = new Date(b.start), x = m.l + i * bw;
     if (start.getHours() % 6 === 0) {
-      const t = svgEl("text", { class: "", x: x + bw / 2, y: H - 4, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
-      t.textContent = start.getHours() === 0 ? start.toLocaleDateString("de-DE", { weekday: "short" }) : `${start.getHours()}h`;
-      svg.append(t);
+      const label = svgEl("text", { class: "", x: x + bw / 2, y: H - 4, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
+      label.textContent = start.getHours() === 0 ? start.toLocaleDateString(locale(), { weekday: "short" }) : `${start.getHours()}h`;
+      svg.append(label);
     }
     if (b.kwh <= 0.005) return;
     const y = Y(b.kwh), h = Math.max(1, H - m.b - y);

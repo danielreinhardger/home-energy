@@ -1,21 +1,22 @@
 // Overview charts over time: power balance, hot water, battery – with the history they draw from.
 // Up to 48 h the page keeps the minute data itself (loaded once, then only new minutes);
 // longer ranges come from the database, already averaged to about the chart width.
+import { t } from "./i18n.js";
 import { api, el, fmt, dayTime, clear } from "./lib.js";
 import { lineChart, legend } from "./charts.js";
 import { balanceChart, balanceLegend } from "./balancechart.js";
 
 const $ = (id) => document.getElementById(id);
-const POWER_SERIES = [
+const POWER_SERIES = () => [
   { key: "pv_w", label: "PV", color: "--series-1" },
-  { key: "house_w", label: "Haus", color: "--series-2" },
-  { key: "battery_w", label: "Batterie", color: "--series-3" },
-  { key: "grid_w", label: "Netz", color: "--series-4" },
-  { key: "car_w", label: "Auto", color: "--series-5" },
+  { key: "house_w", label: t("web.overview.haus"), color: "--series-2" },
+  { key: "battery_w", label: t("web.overview.batterie"), color: "--series-3" },
+  { key: "grid_w", label: t("web.overview.netz"), color: "--series-4" },
+  { key: "car_w", label: t("web.overview.auto"), color: "--series-5" },
 ];
-const DHW_SERIES = [
-  { key: "dhw_temp", label: "Ist", color: "--series-1" },
-  { key: "dhw_target", label: "Soll", color: "--series-2", dashed: true },
+const DHW_SERIES = () => [
+  { key: "dhw_temp", label: t("web.timeline.ist"), color: "--series-1" },
+  { key: "dhw_target", label: t("web.timeline.soll"), color: "--series-2", dashed: true },
 ];
 const LIVE_HOURS = 48;          // up to here the charts use the minute data kept in the page
 const HISTORY_MS = LIVE_HOURS * 3.6e6;
@@ -46,7 +47,7 @@ export function setupTimeline() {
   $("toggle-table").addEventListener("click", () => {
     view.showTable = !view.showTable;
     $("power-table").hidden = !view.showTable;
-    $("toggle-table").textContent = view.showTable ? "Diagramm" : "Tabelle";
+    $("toggle-table").textContent = view.showTable ? "Diagramm" : t("web.html.tabelle");
     $("power-chart").hidden = view.showTable;
     renderCharts();
   });
@@ -114,10 +115,10 @@ export function renderCharts() {
     : view.history.filter((d) => d.t >= since);
   const data = thin(all, Math.max(150, Math.round(($("power-chart").clientWidth || 800) / 2)));
   balanceLegend($("power-legend"));
-  legend($("dhw-legend"), DHW_SERIES);
+  legend($("dhw-legend"), DHW_SERIES());
   if (view.showTable) renderPowerTable(all);
   else balanceChart($("power-chart"), data);
-  lineChart($("dhw-chart"), data, DHW_SERIES, { unit: "°C", digits: 1 });
+  lineChart($("dhw-chart"), data, DHW_SERIES(), { unit: "°C", digits: 1 });
   const ko = Object.fromEntries((view.state?.devices.kostal?.values || []).map((v) => [v.key, v.value]));
   const minSoc = ko.battery_min_soc;
   lineChart($("soc-chart"), data, [{ key: "soc", label: "SOC", color: "--prod-bat" }],
@@ -128,9 +129,9 @@ export function renderCharts() {
 function renderPowerTable(data) {
   const rows = data.slice(-120).reverse();
   clear($("power-table"), el("table", {},
-    el("thead", {}, el("tr", {}, el("th", {}, "Zeit"), POWER_SERIES.map((s) => el("th", { class: "num" }, `${s.label} (W)`)),
+    el("thead", {}, el("tr", {}, el("th", {}, t("web.controltab.zeit")), POWER_SERIES().map((s) => el("th", { class: "num" }, `${s.label} (W)`)),
       el("th", { class: "num" }, "SOC"), el("th", { class: "num" }, "WW °C"))),
     el("tbody", {}, rows.map((d) => el("tr", {}, el("td", {}, dayTime(d.t)),
-      POWER_SERIES.map((s) => el("td", { class: "num" }, fmt(d[s.key], 0))),
+      POWER_SERIES().map((s) => el("td", { class: "num" }, fmt(d[s.key], 0))),
       el("td", { class: "num" }, fmt(d.soc, 0)), el("td", { class: "num" }, fmt(d.dhw_temp, 1)))))));
 }

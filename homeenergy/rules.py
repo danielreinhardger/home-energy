@@ -84,14 +84,6 @@ class RunState:
         return cls(**kwargs)
 
 
-def de(value: float | None, digits: int = 1) -> str:
-    """A number the way the pages show it (German: 1.500 / 46,5), for the explanation texts."""
-    if value is None:
-        return "–"
-    s = f"{value:,.{digits}f}"
-    return s.replace(",", "\u2009").replace(".", ",").replace("\u2009", ".")
-
-
 def stage(id: str, entry: str, title: str, icon: str, intro: str, checks: list[tuple[str, str, str]], *,
           gate: str | None = None, gate_no: str | None = None, all_needed: bool = False,
           fallback: str | None = None) -> dict:

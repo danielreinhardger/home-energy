@@ -3,7 +3,8 @@
 Local dashboard for the **Stiebel Eltron ISG** heat pump, the
 **KOSTAL PLENTICORE plus** PV inverter with its battery and the
 **openWB** wallbox, plus a PV-led hot water and heating controller that keeps the
-house battery from paying for hot water. The pages are in German.
+house battery from paying for hot water. The pages, decisions, alerts and push messages are in
+**English or German** (one setting; the screenshots show German).
 
 ![Overview: energy flow, live tiles, money today and the controllers' decisions](docs/screenshots/overview.png)
 
@@ -149,7 +150,7 @@ database (so it survives restarts and is in the nightly backup), 90 days; the sa
 
 ## Tabs
 
-The UI labels are German; the German name is in parentheses.
+Tab names in English, with the German UI name in parentheses.
 
 - **Overview** („Übersicht“): producer/consumer balance bars and an energy-flow diagram drawn from
   the openWB topology (animated in the direction power flows), live tiles, money today, the
@@ -209,11 +210,13 @@ homeenergy/
   control.py       One control cycle: build the situation, run heating, then hot water
   bookkeeping.py   Daily ledger, minute history, nightly database upkeep and backup
   views.py         Read model: the JSON the pages get (read only)
+  i18n.py          Texts: one catalog per language (lang/de.json, lang/en.json), t(key, **args), fnum()
   service.py       Wires the parts together; the methods the web layer calls
   web.py           HTTP server + JSON API
 web/
   app.js           Wiring only: tabs, polling (paused while hidden), draws the visible tab
-  state.js         Loads the state, joins it with the rarely changing meta (labels, rule texts)
+  state.js         Loads the state, joins it with the rarely changing meta (labels, rule texts, page texts)
+  i18n.js          t(key, args) for the page, the locale for numbers and dates, data-i18n in index.html
   overview.js      Overview: tiles, flow, money, decisions, bath request, forecast
   timeline.js      Overview charts and the history they draw (48 h kept in the page, longer from the DB)
   controltab.js    PV control: decision logs and the settings forms
@@ -272,6 +275,17 @@ Design rules that keep it maintainable:
   them. `tests/test_explain.py` fails when a rule checks something without a step or a step
   names a check no rule makes.
 - **One module per tab** in `web/`; `app.js` only wires tabs and polling.
+- **Texts live in catalogs, not in the code.** Every text the pages, decisions, alerts and pushes
+  show is a key in `homeenergy/lang/<code>.json` (flat `{"key": "text"}`, named `{placeholders}`);
+  the code holds keys and values only: `t("dhw.reason…", kwh=fnum(x))` in Python, `t("web.…", {…})`
+  in the page, `data-i18n="web.html.…"` in `index.html`. Setting labels are `cfg.<section>.<field>`
+  (+ `.help`), device values `dev.<device>.<key>`; values that were German words are codes now
+  (`hp_mode` `heating`/`dhw`, openWB yes/no `1`/`0`, controller `outcome` `written`/`failed`).
+  The language is one setting (PV control → Display → Language, config `"ui": {"language": "de"}`);
+  a new installation starts in English. Stored logs keep the language they were written in.
+  **Adding a language:** copy `en.json` to `<code>.json`, translate every value, add the code to
+  `i18n.LANGUAGES`. `tests/test_i18n.py` fails on a missing or extra key, a different placeholder,
+  an untranslated copy, a key the code uses but no catalog has, and any German literal left in the code.
 
 ## Safety
 

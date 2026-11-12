@@ -2,7 +2,7 @@
 import unittest
 from dataclasses import fields
 
-from homeenergy import config
+from homeenergy import config, i18n
 from homeenergy.settings import undeclared
 
 
@@ -19,7 +19,7 @@ class SettingsTests(unittest.TestCase):
                 if meta["type"] == "number" and value is not None:
                     self.assertLessEqual(meta.get("min", value), value, f"{section}.{name}")
                     self.assertGreaterEqual(meta.get("max", value), value, f"{section}.{name}")
-                self.assertTrue(meta["label"], f"{section}.{name} needs a label")
+                self.assertTrue(i18n.has(f"cfg.{section}.{name}"), f"{section}.{name} needs a label in the catalogs")
 
     def test_forms_follow_the_dataclasses(self):
         # the forms show exactly the declared settings, in field order

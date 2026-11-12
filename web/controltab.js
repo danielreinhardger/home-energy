@@ -1,5 +1,6 @@
 // Regelung tab: the decision logs of both strategies and the settings forms
 // (the forms on the Einstellungen tab load the same way).
+import { t } from "./i18n.js";
 import { api, el, fmt, dayTime, clear, deNum } from "./lib.js";
 import { renderDeviceSettings, renderConfigForm } from "./forms.js";
 
@@ -18,11 +19,11 @@ export async function renderLogs(s) {
 
 function renderLog(node, recent, labels) {
   clear(node, recent.length ? el("table", {},
-    el("thead", {}, el("tr", {}, ["Zeit", "Modus", "Ziel", "Gerät", "Aktion", "Begründung"].map((h) => el("th", {}, h)))),
+    el("thead", {}, el("tr", {}, [t("web.controltab.zeit"), t("web.controltab.modus"), t("web.controltab.ziel"), t("web.controltab.geraet"), t("web.overview.aktion"), t("web.controltab.begruendung")].map((h) => el("th", {}, h)))),
     el("tbody", {}, recent.map((d) => el("tr", {},
       el("td", {}, dayTime(d.time)), el("td", {}, labels[d.mode] || d.mode),
       el("td", { class: "num" }, fmt(d.target, 1, "°C")), el("td", { class: "num" }, fmt(d.device_target, 1, "°C")),
-      el("td", {}, d.action), el("td", {}, deNum(d.reasons.join(" · "))))))) : el("p", { class: "msg" }, "Noch keine Entscheidungen."));
+      el("td", {}, d.action), el("td", {}, deNum(d.reasons.join(" · "))))))) : el("p", { class: "msg" }, t("web.controltab.noch_keine_entscheidungen")));
 }
 
 /** Device settings and the config forms; `onSaved` runs after a form was saved (reloads the state). */

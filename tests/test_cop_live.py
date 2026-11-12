@@ -21,7 +21,7 @@ class ModeTests(unittest.TestCase):
         for _ in range(4):
             d._cache = None                               # skip the 60-s cache
             modes.append(d.read_values()["hp_mode"])
-        self.assertEqual(modes, [None, "Heizen", "Warmwasser", None])   # last: 1 Wh = idle
+        self.assertEqual(modes, [None, "heating", "dhw", None])   # last: 1 Wh = idle
 
 
 class FitTests(unittest.TestCase):

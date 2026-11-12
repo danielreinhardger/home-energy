@@ -12,8 +12,9 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Callable
 
+from .i18n import t
 from .config import AppConfig
-from .controller import ControllerState, DhwController, HeatingController, WriteLimits
+from .controller import ControllerState, DhwController, HeatingController, WRITTEN, WriteLimits
 from .cop import CopModel
 from .dhwpower import DhwPowerController, PowerState
 from .forecast import ForecastSummary
@@ -75,7 +76,7 @@ class Control:
             # right after a start the first reads are simply not done yet: no warning for that
             starting = all(poller.status[k].updated is None and not poller.status[k].error for k in ("kostal", "isg"))
             (log.info if starting else log.warning)(
-                "Regelung pausiert: Daten von Kostal oder ISG fehlen oder sind älter als %.0f s", STALE_AFTER_S)
+                t("control.regelung_pausiert_daten_von_kostal_oder"), STALE_AFTER_S)
             return False
         cfg, now = self._cfg(), self._clock()
         if self.bath is not None and now >= self.bath.deadline:
@@ -90,7 +91,7 @@ class Control:
         last_dhw = (self.dhw.last or {}).get("mode")
         h_inp = HeatingInputs(sit, "bath" if self.bath is not None else last_dhw, cop.heating(sit.outside_temp))
         h_entry = self.heating.step(h_inp, cfg.heating, poller.settings("isg").get(HeatingController.SETTING))
-        if h_entry["action"].startswith("geschrieben"):
+        if h_entry["outcome"] == WRITTEN:
             poller.refresh_settings("isg")
         season = any(r["node"] == "h_season" and r["ok"] for r in h_entry["trace"])
 
@@ -98,7 +99,7 @@ class Control:
         d_inp = DhwInputs(sit, bath=self.bath, heating_season=season, heating_boost=h_entry["mode"] == "boost")
         dhw_cfg = replace(cfg.dhw, cop=round(cop.dhw_cop, 2))          # measured hot water COP
         entry = self.dhw.step(d_inp, dhw_cfg, poller.settings("isg").get(DhwController.SETTING))
-        if entry["action"].startswith("geschrieben"):
+        if entry["outcome"] == WRITTEN:
             poller.refresh_settings("isg")
 
         # 3) hot water power limit (ISG web page) following the surplus while PV heats the tank
@@ -113,7 +114,7 @@ class Control:
         cfg = self._cfg().dhw
         temp = cfg.bath_temp if temp is None else float(temp)
         if not cfg.min_temp <= temp <= 65:
-            raise ValueError(f"Badtemperatur {temp} °C außerhalb {cfg.min_temp}..65 °C")
+            raise ValueError(t("control.badtemperatur_c_ausserhalb_65_c", temp=temp, min_temp=cfg.min_temp))
         deadline = next_occurrence(self._clock(), hhmm or cfg.bath_default_time)
         with self._lock:
             self.bath = BathRequest(deadline, temp)

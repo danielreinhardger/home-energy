@@ -17,44 +17,46 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+from ..i18n import t
+
 MIN_INTERVAL_S = 60
 UNIT_FACTOR = {"MWh": 1000.0, "kWh": 1.0, "Wh": 0.001}
 
 
 @dataclass(frozen=True)
 class WebPoint:
-    key: str
-    label: str            # dashboard label
+    key: str              # dashboard label: the text "dev.isg_web.<key>"
     page_label: str       # label on the ISG page
     unit: str = ""
     group: str = ""
     digits: int = 1
+    options: tuple = ()   # codes with a text "dev.isg_web.<key>.<code>"
 
 
 POINTS = (
-    WebPoint("hp_power_w", "Wärmepumpe Stromaufnahme (Ø 5 min)", "", "W", "Wärmepumpe", 0),
-    WebPoint("evaporator_temp", "Verdampfertemperatur", "VERDAMPFERTEMP.", "°C", "Wärmepumpe"),
-    WebPoint("condenser_temp", "Verflüssigertemperatur", "VERFLÜSSIGERTEMP.", "°C", "Wärmepumpe"),
-    WebPoint("oil_sump_temp", "Ölsumpftemperatur", "OELSUMPFTEMP", "°C", "Wärmepumpe"),
-    WebPoint("exhaust_fan_hz", "Fortluft Lüfterdrehzahl", "FORTLUFT IST LÜFTERDREHZAHL", "Hz", "Lüften", 0),
-    WebPoint("exhaust_flow_pct", "Fortluft Soll-Volumenstrom", "FORTLUFT SOLL VOLUMENSTROM", "%", "Lüften", 0),
-    WebPoint("evaporator_dp", "Differenzdruck Verdampfer", "DIFF.-DRUCK VERDAMPF", "Pa", "Wärmepumpe", 0),
-    WebPoint("heat_heating_day", "Wärme Heizen heute", "WM HEIZEN TAG", "kWh", "Energie heute", 3),
-    WebPoint("heat_dhw_day", "Wärme Warmwasser heute", "WM WW TAG", "kWh", "Energie heute", 3),
-    WebPoint("heat_recovery_day", "Wärmerückgewinnung heute", "WM WRG TAG", "kWh", "Energie heute", 3),
-    WebPoint("power_heating_day", "Strom Heizen heute", "P HEIZUNG TAG", "kWh", "Energie heute", 3),
-    WebPoint("power_dhw_day", "Strom Warmwasser heute", "P WW TAG", "kWh", "Energie heute", 3),
+    WebPoint("hp_power_w", "", "W", 'heat_pump', 0),
+    WebPoint("evaporator_temp", "VERDAMPFERTEMP.", "°C", 'heat_pump'),
+    WebPoint("condenser_temp", "VERFLÜSSIGERTEMP.", "°C", 'heat_pump'),
+    WebPoint("oil_sump_temp", "OELSUMPFTEMP", "°C", 'heat_pump'),
+    WebPoint("exhaust_fan_hz", "FORTLUFT IST LÜFTERDREHZAHL", "Hz", 'ventilation', 0),
+    WebPoint("exhaust_flow_pct", "FORTLUFT SOLL VOLUMENSTROM", "%", 'ventilation', 0),
+    WebPoint("evaporator_dp", "DIFF.-DRUCK VERDAMPF", "Pa", 'heat_pump', 0),
+    WebPoint("heat_heating_day", "WM HEIZEN TAG", "kWh", 'energy_today', 3),
+    WebPoint("heat_dhw_day", "WM WW TAG", "kWh", 'energy_today', 3),
+    WebPoint("heat_recovery_day", "WM WRG TAG", "kWh", 'energy_today', 3),
+    WebPoint("power_heating_day", "P HEIZUNG TAG", "kWh", 'energy_today', 3),
+    WebPoint("power_dhw_day", "P WW TAG", "kWh", 'energy_today', 3),
     # FACHMANN process values: the inverter compressor and its heat output, live (no power setpoint exists)
-    WebPoint("compressor_kw", "Verdichter Motorleistung", "MOTORLEISTUNG", "kW", "Verdichter", 2),
-    WebPoint("heat_output_kw", "Heizleistung gemessen", "HEIZ/KÜHL-LEISTUNG GEMESSEN", "kW", "Verdichter", 2),
-    WebPoint("cop_live", "Leistungszahl jetzt (Wärme ÷ Verdichter)", "", "", "Verdichter", 1),
-    WebPoint("hp_mode", "Betrieb gerade (aus den Zählern)", "", "", "Verdichter", 0),
-    WebPoint("compressor_hz", "Verdichterdrehzahl", "VERDICHTERDREHZAHL", "Hz", "Verdichter", 0),
-    WebPoint("compressor_demand_pct", "Vorgabe Verdichter", "VORGABE VERDICHTER", "%", "Verdichter", 0),
-    WebPoint("heating_output_pct", "Heizleistung relativ", "HEIZLEISTUNG RELATIV", "%", "Verdichter", 0),
-    WebPoint("compressor_current_a", "Motorstrom", "MOTORSTROM", "A", "Verdichter", 1),
-    WebPoint("inverter_temp", "Invertertemperatur", "INVERTERTEMPERATUR", "°C", "Verdichter", 1),
-    WebPoint("evaporator_out_temp", "Verdampferausgang", "VERDAMPFERAUSG. TEMP.", "°C", "Verdichter", 1),
+    WebPoint("compressor_kw", "MOTORLEISTUNG", "kW", 'compressor', 2),
+    WebPoint("heat_output_kw", "HEIZ/KÜHL-LEISTUNG GEMESSEN", "kW", 'compressor', 2),
+    WebPoint("cop_live", "", "", 'compressor', 1),
+    WebPoint("hp_mode", "", "", 'compressor', 0, options=("heating", "dhw")),
+    WebPoint("compressor_hz", "VERDICHTERDREHZAHL", "Hz", 'compressor', 0),
+    WebPoint("compressor_demand_pct", "VORGABE VERDICHTER", "%", 'compressor', 0),
+    WebPoint("heating_output_pct", "HEIZLEISTUNG RELATIV", "%", 'compressor', 0),
+    WebPoint("compressor_current_a", "MOTORSTROM", "A", 'compressor', 1),
+    WebPoint("inverter_temp", "INVERTERTEMPERATUR", "°C", 'compressor', 1),
+    WebPoint("evaporator_out_temp", "VERDAMPFERAUSG. TEMP.", "°C", 'compressor', 1),
 )
 PAGES = ("1,1", "2,3")
 
@@ -78,7 +80,6 @@ def parse_page(page: str) -> dict[str, str]:
 @dataclass(frozen=True)
 class IsgWebSpec:
     key: str = "isg_web"
-    name: str = "Stiebel Eltron ISG (Webseite)"
     points: tuple[WebPoint, ...] = POINTS
     settings: tuple = ()
     page_only: tuple = ()
@@ -145,7 +146,7 @@ class IsgWebDevice:
         for page in PAGES:
             rows.update(parse_page(self._fetch(page)))
         if not rows:
-            raise IOError("ISG-Webseite ohne Werte")
+            raise IOError(t("isgweb.isg_webseite_ohne_werte"))
         values = {p.key: parse_value(rows[p.page_label]) if p.page_label and p.page_label in rows else None
                   for p in POINTS}
         p_h, p_w = values.get("power_heating_day"), values.get("power_dhw_day")
@@ -157,14 +158,14 @@ class IsgWebDevice:
         return values
 
     def _mode(self, p_heating: float | None, p_dhw: float | None) -> str | None:
-        """Heizen or Warmwasser: whichever Wh day counter grew since the last read (None = idle/unknown)."""
+        """"heating" or "dhw": whichever Wh day counter grew since the last read (None = idle/unknown)."""
         prev, self._last_counters = self._last_counters, (p_heating, p_dhw)
         if prev is None or None in prev or p_heating is None or p_dhw is None:
             return None
         dh, dw = p_heating - prev[0], p_dhw - prev[1]
         if max(dh, dw) < 0.002:                         # < 2 Wh: idle (or the midnight reset)
             return None
-        return "Warmwasser" if dw > dh else "Heizen"
+        return "dhw" if dw > dh else "heating"
 
     # -- the one setting written through the page: hot water power limit (not in the Modbus map) --
     POWER_FIELDS = ("420", "421")             # WW-LEISTUNG SOMMER / WINTER on ?s=4,1,1, both kept equal
@@ -181,19 +182,19 @@ class IsgWebDevice:
         """Write the hot water power limit like the page's "Speichern" button (POST save.php),
         then read it back – the page is undocumented, so only a read-back counts."""
         if key != "dhw_power":
-            raise PermissionError(f"ISG-Webseite: {key} wird nicht geschrieben")
+            raise PermissionError(t("isgweb.isg_webseite_wird_nicht_geschrieben", key=key))
         pct = int(round(float(value)))
         if not 30 <= pct <= 100:
-            raise ValueError(f"WW-Leistung {pct} % außerhalb 30…100 %")
+            raise ValueError(t("isgweb.ww_leistung_ausserhalb_30_100", pct=pct))
         data = json.dumps([{"name": f"val{f}", "value": str(pct)} for f in self.POWER_FIELDS])
         answer = self._post("save.php", urllib.parse.urlencode({"data": data}).encode())
         if '"success":true' not in answer.replace(" ", ""):
-            raise IOError(f"ISG hat nicht gespeichert: {answer[:120]}")
+            raise IOError(t("isgweb.isg_hat_nicht_gespeichert", value=answer[:120]))
         for _ in range(5):
             if self.read_settings().get("dhw_power") == pct:
                 return pct
             time.sleep(2)
-        raise IOError(f"WW-Leistung {pct} % gespeichert, aber nicht zurückgelesen")
+        raise IOError(t("isgweb.ww_leistung_gespeichert_aber_nicht", pct=pct))
 
     def _post(self, path: str, body: bytes) -> str:
         req = urllib.request.Request(f"http://{self.host}/{path}", data=body, method="POST",

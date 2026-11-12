@@ -70,8 +70,10 @@ class ExplainTests(unittest.TestCase):
         self.check(heating, heating.HeatingConfig(), self.seen["heating"])
 
     def test_every_mode_has_a_label(self):
-        self.assertEqual(set(hotwater.MODE_LABELS), set(hotwater.DhwMode))
-        self.assertEqual(set(heating.MODE_LABELS), set(heating.HeatMode))
+        for mode in hotwater.DhwMode:
+            self.assertTrue(hotwater.mode_label(mode))
+        for mode in heating.HeatMode:
+            self.assertTrue(heating.mode_label(mode))
 
 
 if __name__ == "__main__":

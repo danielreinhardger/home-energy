@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .i18n import fnum, t
 from . import config as config_mod
 from . import simulate, views
 from .bookkeeping import Bookkeeper
@@ -31,9 +32,10 @@ from .devices.isg_web import IsgWebDevice
 from .devices.openwb import OpenWbDevice
 from .finance import Ledger
 from .alerts import Alerts, BackupWatch, detect, send_push
+from .registers import device_name
 from .roomsensor import RoomSensor
-from .rules import de
-from . import eventlog
+
+from . import eventlog, i18n
 from .forecaster import Forecaster
 from .migrate import import_legacy
 from .polling import Poller
@@ -50,6 +52,7 @@ class Service:
         self.config_path = config_path
         self.data_dir = data_dir
         self.cfg = config_mod.load(config_path)
+        i18n.set_language(self.cfg.ui.language)
         self.clock = clock or (lambda: datetime.now().astimezone())
         self.lock = threading.RLock()
         self._stop = threading.Event()
@@ -94,13 +97,13 @@ class Service:
     # -- lifecycle ------------------------------------------------------------
     def start(self) -> None:
         self._log_handler = eventlog.install(self.store)        # warnings and errors -> store.events
-        log.info("Dienst gestartet", extra=eventlog.EVENT)
+        log.info(t("svc.dienst_gestartet"), extra=eventlog.EVENT)
         loops = [(self._loop, (), "control"), (self.forecaster.loop, (self._stop,), "forecast")]
         loops += [(self.poller.loop, (key, self._stop), f"read-{key}") for key in self.devices]
         for target, args, name in loops:
-            t = threading.Thread(target=target, args=args, name=name, daemon=True)
-            t.start()
-            self._threads.append(t)
+            thread = threading.Thread(target=target, args=args, name=name, daemon=True)
+            thread.start()
+            self._threads.append(thread)
 
     def stop(self) -> None:
         self._stop.set()
@@ -154,10 +157,10 @@ class Service:
     def check_alerts(self) -> None:
         """Once per control cycle: what is wrong right now (alerts.py adds the delays and the push)."""
         p, fc = self.poller, self.forecaster
-        devices = {k: (dev.spec.name, p.fresh(k), p.status[k].error) for k, dev in p.devices.items()}
-        actions = {kind: (ctl.last or {}).get("action", "")
-                   for kind, ctl in (("dhw", self.control.dhw), ("heating", self.control.heating))}
-        actions["dhw_power"] = (self.control.dhw_power.last or {}).get("action", "")
+        devices = {k: (device_name(k), p.fresh(k), p.status[k].error) for k in p.devices}
+        last = {"dhw": self.control.dhw.last, "heating": self.control.heating.last,
+                "dhw_power": self.control.dhw_power.last}
+        actions = {kind: ((e or {}).get("outcome", ""), (e or {}).get("action", "")) for kind, e in last.items()}
         age_h = None if fc.fetched is None else (self.clock() - fc.fetched).total_seconds() / 3600
         problems = detect(self.cfg.alerts, devices, p.latest("isg").get("dhw_temp"), actions,
                           fc.error if self.cfg.forecast.usable else None, age_h)
@@ -169,7 +172,7 @@ class Service:
             if note:
                 eur = self.backup.total * self.cfg.economy.price_buy
                 out = isg.get("outside_temp")
-                extra = f" ≈ {de(eur, 2)} €" + (f" · draußen {de(out)} °C" if out is not None else "")
+                extra = f" ≈ {fnum(eur, 2)} €" + (t("svc.draussen_c", out=fnum(out)) if out is not None else "")
                 self.alerts.notice(self.cfg.alerts, note + extra)
 
     # -- the room temperature ------------------------------------------------------------
@@ -198,8 +201,8 @@ class Service:
         """Send a test message to the configured push address (raises on failure)."""
         url = self.cfg.alerts.push_url
         if not url:
-            raise ValueError("keine Push-Adresse eingetragen")
-        send_push(url, "Testnachricht: Hinweise vom Smarthome 28 kommen hier an.", tags="bell")
+            raise ValueError(t("svc.keine_push_adresse_eingetragen"))
+        send_push(url, t("svc.testnachricht_hinweise_vom_smarthome_28"), tags="bell")
 
     # -- models used by control and the pages -----------------------------------------
     def cop_model(self) -> CopModel:
@@ -242,10 +245,8 @@ class Service:
         dev = self.devices[device]
         if device == "isg" and self.controlled_setting(key):
             raise PermissionError(
-                "WW Soll Tag wird gerade von der PV-Regelung gesteuert. "
-                "Komforttemperatur in der Regelung ändern oder Regelung ausschalten." if key == DhwController.SETTING else
-                "Raumtemp. Tag wird gerade vom PV-Heizen gesteuert. "
-                "Normale Raumtemperatur unter PV-Regelung ändern oder PV-Heizen ausschalten.")
+                t("svc.ww_soll_tag_wird_gerade_von") if key == DhwController.SETTING else
+                t("svc.raumtemp_tag_wird_gerade_vom_pv"))
         back = dev.write_setting(key, value)
         self.poller.refresh_settings(device)
         return back
@@ -268,6 +269,7 @@ class Service:
             new = config_mod.update_section(self.cfg, section, patch)
             forecast_changed = section == "forecast" and new.forecast != self.cfg.forecast
             self.cfg = new
+            i18n.set_language(new.ui.language)
             self.control.apply_limits(new)
             config_mod.save(new, self.config_path)
             if forecast_changed:

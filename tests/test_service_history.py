@@ -7,12 +7,13 @@ from homeenergy.devices import SPECS
 from homeenergy import views
 from homeenergy.service import Service
 
-from fakes import FakeRegisters
+from fakes import FakeRegisters, german_config
 
 
 def make_service(tmp: Path) -> Service:
     devices = {"isg": ModbusDevice(SPECS["isg"], "fake", client=FakeRegisters()),
                "kostal": ModbusDevice(SPECS["kostal"], "fake", client=FakeRegisters())}
+    german_config(tmp / "config.json")                       # the texts these tests check are German
     return Service(tmp / "config.json", tmp / "data", devices=devices)
 
 

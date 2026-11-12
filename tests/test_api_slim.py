@@ -8,6 +8,7 @@ from pathlib import Path
 from homeenergy import views
 from homeenergy.store import Store
 
+from fakes import use_language
 from test_runtime import make_service
 
 T0 = 1_794_000_000
@@ -87,13 +88,14 @@ class PointMetaTests(unittest.TestCase):
     def test_every_device_kind(self):
         # the test service has no openWB or ISG web page: check their point kinds here
         from homeenergy.devices import isg_web, kostal, openwb
-        for points in (kostal.POINTS, openwb.POINTS, isg_web.POINTS):
+        for device, points in (("kostal", kostal.POINTS), ("openwb", openwb.POINTS), ("isg_web", isg_web.POINTS)):
             for pt in points:
-                self.assertEqual(views.point_meta(pt)["key"], pt.key)
+                self.assertEqual(views.point_meta(device, pt)["key"], pt.key)
 
     def test_status_texts(self):
         from homeenergy.devices import kostal
-        state = next(views.point_meta(p) for p in kostal.POINTS if p.key == "state")
+        with use_language("de"):
+            state = next(views.point_meta("kostal", p) for p in kostal.POINTS if p.key == "state")
         self.assertEqual(state["options"]["6"], "Einspeisen")
 
 

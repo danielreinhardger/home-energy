@@ -11,7 +11,10 @@ import json
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from .i18n import t
 from . import config as config_mod
+from . import i18n
+from .settings import WORD_UNITS
 from . import heating as heating_rules
 from . import hotwater as hotwater_rules
 from .devices.openwb import OpenWbDevice
@@ -19,6 +22,8 @@ from .economics import merit_order, money_today
 from .flow import build_flow, fallback_hierarchy, kostal_powers
 from .hotwater import bath_plan
 from .polling import Poller
+from .registers import (device_name, group_label, option_texts, page_only_texts, point_label,
+                        setting_label, setting_note)
 from .store import to_ts
 
 if TYPE_CHECKING:
@@ -52,7 +57,7 @@ def energy(poller: Poller) -> dict[str, float | None]:
         # live heat output and COP (FACHMANN page): how efficient each run really is
         "hp_heat_w": None if w.get("heat_output_kw") is None else w["heat_output_kw"] * 1000,
         "cop_live": w.get("cop_live"),
-        "cop_heating_live": w.get("cop_live") if w.get("hp_mode") == "Heizen" else None,
+        "cop_heating_live": w.get("cop_live") if w.get("hp_mode") == "heating" else None,
         # kept for calibrating the house model (how fast does it cool at night?)
         # (until 2026-11-11 "room_temp" held the ISG's echo of its own room target – no measurement;
         #  the real room temperature is added by the service as "room_sensor")
@@ -89,7 +94,7 @@ def snapshot(svc: "Service") -> dict:
             st = p.status[key]
             vals = st.values or {}
             devices[key] = {
-                "name": dev.spec.name, "host": dev.host, "error": st.error, "updated": st.updated,
+                "name": device_name(key), "host": dev.host, "error": st.error, "updated": st.updated,
                 "stale": not p.fresh(key),
                 "values": {pt.key: vals.get(pt.key) for pt in dev.spec.points},   # labels: meta()
             }
@@ -115,13 +120,13 @@ def snapshot(svc: "Service") -> dict:
         }
 
 
-def point_meta(pt) -> dict:
-    """Label, unit, group and digits of one device value – any device kind (Modbus, MQTT, web page);
-    status codes of Modbus points also carry their texts ("options")."""
-    out = {"key": pt.key, "label": pt.label, "unit": pt.unit, "group": pt.group, "digits": pt.digits}
-    options = getattr(pt, "options", None)          # only registers.Point has status texts
-    if options:
-        out["options"] = {str(code): text for code, text in options.items()}
+def point_meta(device: str, pt) -> dict:
+    """Label, unit, group and digits of one device value – any device kind (Modbus, MQTT, web page) –
+    in the current language; status codes also carry their texts ("options")."""
+    out = {"key": pt.key, "label": point_label(device, pt.key), "unit": pt.unit,
+           "group": group_label(pt.group), "digits": pt.digits}
+    if pt.options:
+        out["options"] = option_texts(f"dev.{device}.{pt.key}", pt.options)
     return out
 
 
@@ -137,9 +142,10 @@ def meta(svc: "Service") -> dict:
     if _meta_cache and _meta_cache[0] is cfg:
         return _meta_cache[1]
     body = {
-        "devices": {key: [point_meta(pt) for pt in dev.spec.points]
+        "devices": {key: [point_meta(key, pt) for pt in dev.spec.points]
                     for key, dev in svc.poller.devices.items()},
         "explain": {"dhw": explain(hotwater_rules, cfg.dhw), "heating": explain(heating_rules, cfg.heating)},
+        "language": i18n.language(), "locale": i18n.locale(), "texts": i18n.web_texts(),
     }
     raw = json.dumps(body, sort_keys=True, ensure_ascii=False).encode()
     out = {"version": hashlib.sha1(raw).hexdigest()[:12], **body}
@@ -160,8 +166,9 @@ def decisions(svc: "Service", limit: int = 30) -> dict:
 
 def explain(rules, cfg) -> dict:
     """A strategy's steps, outcome names and off text for the explanation tab (texts live next to the rules)."""
-    return {"stages": rules.stages(cfg), "outcomes": rules.OUTCOMES, "off": rules.OFF_TEXT,
-            "modes": {m.value: label for m, label in rules.MODE_LABELS.items()}}
+    modes = rules.DhwMode if rules is hotwater_rules else rules.HeatMode
+    return {"stages": rules.stages(cfg), "outcomes": rules.outcome_texts(), "off": rules.off_text(),
+            "modes": {m.value: rules.mode_label(m) for m in modes}}
 
 
 def flow(p: Poller) -> dict:
@@ -175,7 +182,7 @@ def flow(p: Poller) -> dict:
     hierarchy, names = fallback_hierarchy()
     powers, home = kostal_powers(k)
     out = build_flow(hierarchy, names, powers, home, k, i, o)
-    out["source"] = "Kostal (openWB nicht erreichbar)"
+    out["source"] = t("view.kostal_openwb_nicht_erreichbar")
     return out
 
 
@@ -223,13 +230,13 @@ def settings(svc: "Service") -> dict:
         for key, dev in p.devices.items():
             current = p.settings(key)
             out[key] = {
-                "name": dev.spec.name,
-                "page_only": list(dev.spec.page_only),
+                "name": device_name(key),
+                "page_only": page_only_texts(key, dev.spec.page_only),
                 "settings": [
-                    {"key": s.key, "label": s.label, "group": s.group, "unit": s.unit,
+                    {"key": s.key, "label": setting_label(key, s.key), "group": group_label(s.group), "unit": s.unit,
                      "min": s.minimum, "max": s.maximum, "step": s.step,
-                     "options": {str(k): v for k, v in s.options.items()},
-                     "writable": s.writable, "verified": s.verified, "note": s.note,
+                     "options": option_texts(f"dev.{key}.set.{s.key}", s.options),
+                     "writable": s.writable, "verified": s.verified, "note": setting_note(key, s.key),
                      "controlled": key == "isg" and svc.controlled_setting(s.key),
                      "value": current.get(s.key)}
                     for s in dev.spec.settings],
@@ -237,8 +244,22 @@ def settings(svc: "Service") -> dict:
         return {"devices": out,
                 "config": {sec: {"values": getattr(cfg, sec).__dict__ if sec != "forecast"
                                  else {**cfg.forecast.__dict__, "arrays": [a.__dict__ for a in cfg.forecast.arrays]},
-                                 "fields": meta}
+                                 "fields": field_texts(sec, meta)}
                            for sec, meta in config_mod.UI_FIELDS.items()}}
+
+
+def field_texts(section: str, fields: dict[str, dict]) -> dict[str, dict]:
+    """The settings forms' metadata with each field's label, help and unit in the current language."""
+    out = {}
+    for name, meta in fields.items():
+        key = f"cfg.{section}.{name}"
+        m = dict(meta, label=i18n.t(key))
+        if i18n.has(key + ".help"):
+            m["help"] = i18n.t(key + ".help")
+        if m.get("unit") in WORD_UNITS:
+            m["unit"] = i18n.t(f"unit.{m['unit']}")
+        out[name] = m
+    return out
 
 
 def perf(svc: "Service") -> dict:
@@ -260,7 +281,7 @@ def room(svc: "Service") -> dict:
     """The room sensor card: last reading, its age, and the value the heating strategy uses."""
     h = svc.cfg.heating
     view = svc.room.view(svc.clock(), h.room_sensor_max_age_min)
-    view["source"] = "Wärmepumpe (Raumbedienung)" if h.room_from_isg else "Raumfühler"
+    view["source"] = t("view.waermepumpe_raumbedienung") if h.room_from_isg else t("view.raumfuehler")
     view["used"] = svc.room_temp()
     return view
 
@@ -279,7 +300,7 @@ def history(svc: "Service", since: str | None = None, columns: bool = False) -> 
         start = (int(since) if since and since.isdigit() else to_ts(since)) if since \
             else to_ts(svc.clock()) - HISTORY_HOURS * 3600
     except ValueError:
-        raise ValueError("since: ISO-Zeit oder Unix-Sekunden erwartet") from None
+        raise ValueError(t("view.since_iso_zeit_oder_unix_sekunden")) from None
     return svc.store.samples(start, columns=columns)
 
 
@@ -290,7 +311,7 @@ def history_range(svc: "Service", start: str, end: str | None = None, points: in
         a = to_ts(start)
         b = to_ts(end) if end else to_ts(svc.clock())
     except ValueError:
-        raise ValueError("from/to: ISO-Zeit erwartet") from None
+        raise ValueError(t("view.from_to_iso_zeit_erwartet")) from None
     if b <= a:
         raise ValueError("from muss vor to liegen")
     return svc.store.series(a, b, max(50, min(int(points), 3000)), columns=columns)

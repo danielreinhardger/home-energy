@@ -15,17 +15,18 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from .i18n import t
 from .settings import flag, hidden, num
 
 API = "https://api.open-meteo.com/v1/forecast"
-DAY_PARTS = (("Vormittag", 9), ("Mittag", 12), ("Nachmittag", 15))   # local hour starts (tomorrow)
-# Phases of the day for "now" and "next" on today's card: (start hour, name, length in hours)
-PHASES = ((0, "Nacht", 6), (6, "Morgen", 4), (10, "Mittag", 4), (14, "Nachmittag", 4), (18, "Abend", 4),
-          (22, "Nacht", 8))
+DAY_PARTS = (("forenoon", 9), ("midday", 12), ("afternoon", 15))   # local hour starts (tomorrow): "fc.part.<code>"
+# Phases of the day for "now" and "next" on today's card: (start hour, code, length in hours): "fc.phase.<code>"
+PHASES = ((0, "night", 6), (6, "morning", 4), (10, "midday", 4), (14, "afternoon", 4), (18, "evening", 4),
+          (22, "night", 8))
 
 
 def phase_at(dt: datetime) -> tuple[str, datetime, int]:
-    """Name, start and length of the phase of day that contains `dt` (local time)."""
+    """Code, start and length of the phase of day that contains `dt` (local time)."""
     for start_h, name, length in reversed(PHASES):
         if dt.hour >= start_h:
             return name, dt.replace(hour=start_h, minute=0, second=0, microsecond=0), length
@@ -53,11 +54,11 @@ class PvArray:
 
 @dataclass
 class ForecastConfig:
-    enabled: bool = flag(False, 'Wetterprognose nutzen', 'Open-Meteo, kostenlos, ohne API-Schlüssel.')
-    latitude: float | None = num(None, 'Breitengrad', '°', -90, 90, 0.0001)
-    longitude: float | None = num(None, 'Längengrad', '°', -180, 180, 0.0001)
-    performance_ratio: float = num(0.85, 'Performance Ratio', '', 0.5, 1, 0.01)
-    refresh_minutes: int = num(60, 'Aktualisierung', 'min', 15, 360, 5)
+    enabled: bool = flag(False)
+    latitude: float | None = num(None, '°', -90, 90, 0.0001)
+    longitude: float | None = num(None, '°', -180, 180, 0.0001)
+    performance_ratio: float = num(0.85, '', 0.5, 1, 0.01)
+    refresh_minutes: int = num(60, 'min', 15, 360, 5)
     arrays: list[PvArray] = hidden(default_factory=lambda: [PvArray(kwp=11.0)], why='edited in its own table')
 
     @property
@@ -130,7 +131,6 @@ def fetch_weather(cfg: ForecastConfig, fetch=None) -> Weather:
     return Weather(hourly, daily, is_day, temps)
 
 
-WEEKDAYS = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
 OUTLOOK_HOURS = (6, 9, 12, 15, 18, 21)       # local hour starts shown per day
 
 
@@ -149,7 +149,8 @@ def outlook(hours: list[HourlyPv], weather: Weather | None, now: datetime, calib
         day = now.date() + timedelta(days=offset)
         w = next((x for x in weather.daily if x.day == day), None) if weather else None
         pv = per_day.get(day, [])
-        label = "Morgen" if offset == 1 else "Übermorgen" if offset == 2 else WEEKDAYS[day.weekday()]
+        weekday = t(f"fc.weekday.{day.weekday()}")
+        label = t("fc.tomorrow") if offset == 1 else t("fc.day_after_tomorrow") if offset == 2 else weekday
         parts = []
         for hour in OUTLOOK_HOURS:
             at = datetime.combine(day, datetime.min.time(), local).replace(hour=hour)
@@ -158,7 +159,7 @@ def outlook(hours: list[HourlyPv], weather: Weather | None, now: datetime, calib
                           "night": (weather.hourly_is_day.get(utc(at)) is False) if weather else False,
                           "temp": weather.hourly_temp.get(utc(at)) if weather else None})
         out.append({
-            "date": day.isoformat(), "label": label, "weekday": WEEKDAYS[day.weekday()],
+            "date": day.isoformat(), "label": label, "weekday": weekday,
             "code": w.code if w else None, "tmin": w.tmin if w else None, "tmax": w.tmax if w else None,
             "sunshine_h": None if not w or w.sunshine_h is None else round(w.sunshine_h, 1),
             "precip_mm": None if not w or w.precip_mm is None else round(w.precip_mm, 1),
@@ -214,17 +215,19 @@ class ForecastSummary:
         now = self.now or self.fetched_at
         today = now.date()
         out = []
-        for offset, label in ((0, "Heute"), (1, "Morgen")):
+        for offset, label in ((0, t("fc.today")), (1, t("fc.tomorrow"))):
             day = today + timedelta(days=offset)
             w = next((x for x in self.weather.daily if x.day == day), None) if self.weather else None
             if offset == 0:
                 # today: the phase we're in (weather of this hour) and the next phase (its middle hour)
                 cur_name, _, _ = phase_at(now)
                 nxt_name, nxt_start, nxt_len = next_phase(now)
-                parts = [self._part("Jetzt", cur_name, now),
-                         self._part(f"Ab {nxt_start.hour} Uhr", nxt_name, nxt_start + timedelta(hours=nxt_len // 2))]
+                parts = [self._part(t("fc.now"), t(f"fc.phase.{cur_name}"), now),
+                         self._part(t("fc.ab_uhr", hour=nxt_start.hour), t(f"fc.phase.{nxt_name}"),
+                                    nxt_start + timedelta(hours=nxt_len // 2))]
             else:
-                parts = [self._part(part, f"{hour}–{hour + 1} Uhr", now.replace(hour=hour) + timedelta(days=offset))
+                parts = [self._part(t(f"fc.part.{part}"), t("fc.uhr", hour=hour, hour2=hour + 1),
+                                    now.replace(hour=hour) + timedelta(days=offset))
                          for part, hour in DAY_PARTS]
             out.append({"label": label, "date": day.isoformat(), "parts": parts,
                         "pv_kwh": round((self.today_wh if offset == 0 else self.tomorrow_wh) / 1000, 1),

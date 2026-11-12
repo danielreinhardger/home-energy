@@ -19,12 +19,14 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..i18n import t
 from ..mqtt import MqttSubscriber
 
 STALE_SECONDS = 120
 
-CHARGE_MODES = {"pv_charging": "PV-Laden", "instant_charging": "Sofortladen", "scheduled_charging": "Zielladen",
-                "eco_charging": "Eco-Laden", "time_charging": "Zeitladen", "standby": "Standby", "stop": "Stop"}
+# openWB charge modes (texts: dev.openwb.cp_mode.<code>; an unknown mode shows as its code)
+CHARGE_MODES = ("pv_charging", "instant_charging", "scheduled_charging", "eco_charging", "time_charging",
+                "standby", "stop")
 
 TOPICS = [
     "openWB/counter/get/hierarchy",
@@ -48,28 +50,28 @@ TOPICS = [
 @dataclass(frozen=True)
 class MqttPoint:
     """A value read from one MQTT topic. `{cp}`/`{counter}`/... are filled from the hierarchy."""
-    key: str
-    label: str
+    key: str              # label: the text "dev.openwb.<key>"
     topic: str
     unit: str = ""
     group: str = ""
     digits: int = 0
     convert: Callable[[Any], Any] | None = None
+    options: tuple = ()   # codes with a text "dev.openwb.<key>.<code>"
 
 
 def _kwh(v):
     return None if v is None else v / 1000
 
 
-def _bool_de(v):
-    return None if v is None else ("ja" if v else "nein")
+def _flag(v):
+    return None if v is None else int(bool(v))
 
 
 def _mode(template):
     if not isinstance(template, dict):
         return None
     sel = template.get("chargemode", {}).get("selected")
-    return CHARGE_MODES.get(sel, sel)
+    return sel
 
 
 def _max(values):
@@ -82,36 +84,35 @@ def _name(info):
 
 CP = "openWB/chargepoint/{cp}"
 POINTS = (
-    MqttPoint("cp_power", "Ladeleistung", f"{CP}/get/power", "W", "Ladepunkt"),
-    MqttPoint("cp_plugged", "Fahrzeug angesteckt", f"{CP}/get/plug_state", "", "Ladepunkt", convert=_bool_de),
-    MqttPoint("cp_charging", "Lädt", f"{CP}/get/charge_state", "", "Ladepunkt", convert=_bool_de),
-    MqttPoint("cp_mode", "Lademodus", f"{CP}/set/charge_template", "", "Ladepunkt", convert=_mode),
-    MqttPoint("cp_state", "Status", f"{CP}/get/state_str", "", "Ladepunkt"),
-    MqttPoint("cp_vehicle", "Fahrzeug", f"{CP}/get/connected_vehicle/info", "", "Ladepunkt", convert=_name),
-    MqttPoint("cp_phases", "Phasen in Benutzung", f"{CP}/get/phases_in_use", "", "Ladepunkt"),
-    MqttPoint("cp_current", "Ladestrom (max. Phase)", f"{CP}/get/currents", "A", "Ladepunkt", 1, _max),
-    MqttPoint("cp_daily", "Geladen heute", f"{CP}/get/daily_imported", "kWh", "Energie", 2, _kwh),
-    MqttPoint("cp_total", "Geladen gesamt", f"{CP}/get/imported", "kWh", "Energie", 0, _kwh),
-    MqttPoint("grid_power", "Netz (+Bezug/−Einspeisung)", "openWB/counter/{counter}/get/power", "W", "Netz"),
-    MqttPoint("grid_import_day", "Netzbezug heute", "openWB/counter/{counter}/get/daily_imported", "kWh", "Energie", 2, _kwh),
-    MqttPoint("grid_export_day", "Einspeisung heute", "openWB/counter/{counter}/get/daily_exported", "kWh", "Energie", 2, _kwh),
-    MqttPoint("pv_power", "PV (−Erzeugung)", "openWB/pv/{inverter}/get/power", "W", "PV"),
-    MqttPoint("pv_day", "PV heute", "openWB/pv/{inverter}/get/daily_exported", "kWh", "Energie", 2, _kwh),
-    MqttPoint("bat_power", "Batterie (+Laden/−Entladen)", "openWB/bat/{bat}/get/power", "W", "Batterie"),
-    MqttPoint("bat_soc", "Batterie SOC", "openWB/bat/{bat}/get/soc", "%", "Batterie"),
-    MqttPoint("home_power", "Hausverbrauch (ohne Ladepunkt)", "openWB/counter/set/home_consumption", "W", "Haus"),
-    MqttPoint("home_day", "Hausverbrauch heute", "openWB/counter/set/daily_yield_home_consumption", "kWh", "Energie", 2, _kwh),
-    MqttPoint("version", "openWB-Version", "openWB/system/version", "", "Info"),
+    MqttPoint("cp_power", f"{CP}/get/power", "W", 'charge_point'),
+    MqttPoint("cp_plugged", f"{CP}/get/plug_state", "", 'charge_point', convert=_flag, options=(0, 1)),
+    MqttPoint("cp_charging", f"{CP}/get/charge_state", "", 'charge_point', convert=_flag, options=(0, 1)),
+    MqttPoint("cp_mode", f"{CP}/set/charge_template", "", 'charge_point', convert=_mode, options=CHARGE_MODES),
+    MqttPoint("cp_state", f"{CP}/get/state_str", "", 'charge_point'),
+    MqttPoint("cp_vehicle", f"{CP}/get/connected_vehicle/info", "", 'charge_point', convert=_name),
+    MqttPoint("cp_phases", f"{CP}/get/phases_in_use", "", 'charge_point'),
+    MqttPoint("cp_current", f"{CP}/get/currents", "A", 'charge_point', 1, _max),
+    MqttPoint("cp_daily", f"{CP}/get/daily_imported", "kWh", 'energy', 2, _kwh),
+    MqttPoint("cp_total", f"{CP}/get/imported", "kWh", 'energy', 0, _kwh),
+    MqttPoint("grid_power", "openWB/counter/{counter}/get/power", "W", 'grid'),
+    MqttPoint("grid_import_day", "openWB/counter/{counter}/get/daily_imported", "kWh", 'energy', 2, _kwh),
+    MqttPoint("grid_export_day", "openWB/counter/{counter}/get/daily_exported", "kWh", 'energy', 2, _kwh),
+    MqttPoint("pv_power", "openWB/pv/{inverter}/get/power", "W", 'pv'),
+    MqttPoint("pv_day", "openWB/pv/{inverter}/get/daily_exported", "kWh", 'energy', 2, _kwh),
+    MqttPoint("bat_power", "openWB/bat/{bat}/get/power", "W", 'battery'),
+    MqttPoint("bat_soc", "openWB/bat/{bat}/get/soc", "%", 'battery'),
+    MqttPoint("home_power", "openWB/counter/set/home_consumption", "W", 'house'),
+    MqttPoint("home_day", "openWB/counter/set/daily_yield_home_consumption", "kWh", 'energy', 2, _kwh),
+    MqttPoint("version", "openWB/system/version", "", 'info'),
 )
 
 
 @dataclass(frozen=True)
 class OpenWbSpec:
     key: str = "openwb"
-    name: str = "openWB Wallbox"
     points: tuple[MqttPoint, ...] = POINTS
     settings: tuple = ()
-    page_only: tuple[str, ...] = ("Lademodus, Ladeprofile und alle Einstellungen: openWB-Weboberfläche",)
+    page_only: tuple[str, ...] = ("all",)
 
 
 class OpenWbDevice:
@@ -183,9 +184,9 @@ class OpenWbDevice:
 
     def read_values(self) -> dict[str, Any]:
         if not self.mqtt.connected:
-            raise ConnectionError(f"MQTT {self.host}: {self.mqtt.last_error or 'nicht verbunden'}")
+            raise ConnectionError(f"MQTT {self.host}: {self.mqtt.last_error or t("openwb.nicht_verbunden")}")
         if self.mqtt.last_message is None or time.time() - self.mqtt.last_message > STALE_SECONDS:
-            raise ConnectionError(f"MQTT {self.host}: keine aktuellen Daten")
+            raise ConnectionError(t("openwb.mqtt_keine_aktuellen_daten", host=self.host))
         ids = self.ids()
         out = {}
         for p in self.spec.points:
@@ -202,7 +203,7 @@ class OpenWbDevice:
         return {}
 
     def write_setting(self, key: str, value: float):
-        raise PermissionError("openWB ist nur lesend angebunden")
+        raise PermissionError(t("openwb.openwb_ist_nur_lesend_angebunden"))
 
     def close(self) -> None:
         self.mqtt.stop()

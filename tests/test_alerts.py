@@ -10,11 +10,11 @@ OK = {"isg": ("ISG", True, None), "kostal": ("Kostal", True, None)}
 
 class DetectTests(unittest.TestCase):
     def test_all_fine(self):
-        self.assertEqual(detect(AlertConfig(), OK, 45.0, {"dhw": "unverändert"}, None, 0.5), [])
+        self.assertEqual(detect(AlertConfig(), OK, 45.0, {"dhw": ("", "unverändert")}, None, 0.5), [])
 
     def test_each_problem(self):
         devices = {**OK, "kostal": ("Kostal", False, "timeout")}
-        found = detect(AlertConfig(), devices, 30.0, {"heating": "Fehler beim Schreiben: refused"}, "HTTP 500", 5)
+        found = detect(AlertConfig(), devices, 30.0, {"heating": ("failed", "Fehler beim Schreiben: refused")}, "HTTP 500", 5)
         self.assertEqual([p.key for p in found], ["device:kostal", "write:heating", "dhw:cold", "forecast"])
         self.assertIn("timeout", found[0].text)
         self.assertEqual(found[0].delay_min, 10)

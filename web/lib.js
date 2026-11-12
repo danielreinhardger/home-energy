@@ -1,5 +1,7 @@
 // Shared helpers: API access, DOM building, number formatting.
 
+import { locale } from "./i18n.js";
+
 export async function api(path, body) {
   const opts = body === undefined ? {} : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -26,7 +28,7 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-const nf = (digits = 0) => new Intl.NumberFormat("de-DE", {
+const nf = (digits = 0) => new Intl.NumberFormat(locale(), {
   minimumFractionDigits: digits, maximumFractionDigits: digits,
 });
 
@@ -43,12 +45,12 @@ export function power(w) {
   return Math.abs(w) < 1000 ? { v: nf(0).format(w), u: "W" } : { v: nf(2).format(w / 1000), u: "kW" };
 }
 
-export const time = (iso) => new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-export const dayTime = (iso) => new Date(iso).toLocaleString("de-DE", {
+export const time = (iso) => new Date(iso).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+export const dayTime = (iso) => new Date(iso).toLocaleString(locale(), {
   weekday: "short", hour: "2-digit", minute: "2-digit",
 });
 /** With the date, for chart ranges longer than two days. */
-export const dateTime = (iso) => new Date(iso).toLocaleString("de-DE", {
+export const dateTime = (iso) => new Date(iso).toLocaleString(locale(), {
   weekday: "short", day: "numeric", month: "numeric", year: "2-digit", hour: "2-digit", minute: "2-digit",
 });
 

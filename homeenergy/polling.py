@@ -11,6 +11,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .i18n import t
+from .registers import device_name
+
 log = logging.getLogger(__name__)
 
 # Seconds between reads (others: poll_seconds); the ISG web pages are slow and only change once a minute.
@@ -64,7 +67,7 @@ class Poller:
                 was_error = st.error
                 st.values, st.settings, st.error, st.updated = values, settings, None, time.time()
             if was_error:
-                log.info("%s: antwortet wieder", key, extra={"event": True})
+                log.info(t("poll.answers_again", device=device_name(key)), extra={"event": True})
         except Exception as exc:
             with self._lock:
                 st.error, st.failures = str(exc), st.failures + 1

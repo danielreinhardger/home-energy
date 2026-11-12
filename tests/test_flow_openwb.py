@@ -105,8 +105,8 @@ class OpenWbDeviceTests(unittest.TestCase):
     def test_values_follow_the_hierarchy_ids(self):
         v = self.device().read_values()
         self.assertEqual(v["cp_power"], 3680.5)
-        self.assertEqual(v["cp_plugged"], "ja")
-        self.assertEqual(v["cp_mode"], "PV-Laden")
+        self.assertEqual(v["cp_plugged"], 1)
+        self.assertEqual(v["cp_mode"], "pv_charging")               # a code; the text comes from the catalog
         self.assertEqual(v["cp_current"], 5.3)
         self.assertAlmostEqual(v["cp_daily"], 3.60303)
         self.assertEqual(v["grid_power"], -500)

@@ -13,7 +13,9 @@ Sources: STIEBEL ELTRON tender text / product flyer LWZ 5 S Plus (heinze.de, sti
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from .i18n import fnum, t
+
+from dataclasses import dataclass, field
 
 DATASHEET_HEATING = ((-7.0, 2.61), (2.0, 3.74), (7.0, 4.74))    # (outside °C, COP at W35)
 HEAT_OUTPUT_KW = 4.4
@@ -83,7 +85,7 @@ def fit_live(points: list[tuple[float, float]]) -> LiveFit | None:
 class CopModel:
     heating_scale: float = 1.0       # measured / datasheet
     dhw_cop: float = 2.6             # at comfort temperature
-    source: str = "Datenblatt"
+    source: str = field(default_factory=lambda: t("cop.datenblatt"))
     live: LiveFit | None = None      # measured shape (only for the day/night ratio)
 
     def heating(self, outside_c: float | None) -> float:
@@ -132,17 +134,17 @@ def calibrate(isg: dict, recent: dict | None = None, fallback_heating: float = 4
         return None
 
     lifetime_h = ratio(isg.get("heat_heating_total"), isg.get("power_heating_total"), 1.5, 7)
-    scale, src = 1.0, "Datenblatt"
+    scale, src = 1.0, t("cop.datenblatt")
     days = [d for d in (heating_days or []) if d[2] >= 1.0]
     if len(days) >= MIN_HEATING_DAYS:
         # measured days: compare each day's COP with the datasheet at that day's outside temperature,
         # weighted by how much the heat pump ran
-        expected = sum(power * datasheet_cop(t) for t, _, power in days)
+        expected = sum(power * datasheet_cop(temp) for temp, _, power in days)
         scale = max(0.6, min(1.4, sum(heat for _, heat, _ in days) / expected))
-        src = f"Datenblatt × {scale:.2f} (gemessen, {len(days)} Heiztage)"
+        src = t("cop.datenblatt_gemessen_heiztage", scale=fnum(scale, 2), value=len(days))
     elif lifetime_h:
         scale = max(0.8, min(1.4, lifetime_h / datasheet_cop(REFERENCE_SEASON_TEMP)))
-        src = f"Datenblatt × {scale:.2f} (Zähler)"
+        src = t("cop.datenblatt_zaehler", scale=fnum(scale, 2))
     elif fallback_heating:
         scale = max(0.8, min(1.4, fallback_heating / datasheet_cop(REFERENCE_SEASON_TEMP)))
 
@@ -152,7 +154,7 @@ def calibrate(isg: dict, recent: dict | None = None, fallback_heating: float = 4
         if dhw and (recent.get("power_dhw_kwh") or 0) < 10:      # too little data yet
             dhw = None
         if dhw:
-            src += ", WW: letzte Tage"
+            src += t("cop.ww_letzte_tage")
     if dhw is None:
         dhw = ratio(isg.get("heat_dhw_total"), isg.get("power_dhw_total"), 1.2, 5) or fallback_dhw
     return CopModel(scale, dhw, src, live)

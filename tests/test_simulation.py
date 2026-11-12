@@ -9,7 +9,7 @@ class SimulationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.rows = {r["scenario"]: r for r in compare()}
+        cls.rows = {r["code"]: r for r in compare()}
 
     def test_winter_days_save_money_and_night_heating(self):
         for s in SCENARIOS:

@@ -1,4 +1,6 @@
 // Small stroke icons (24×24, currentColor) drawn for this dashboard. No dependencies.
+import { t } from "./i18n.js";
+
 const NS = "http://www.w3.org/2000/svg";
 
 const CLOUD_HI = "M7 14h10a3.6 3.6 0 0 0 .4-7.2A5.5 5.5 0 0 0 6.6 7.6 3.2 3.2 0 0 0 7 14z";
@@ -31,16 +33,16 @@ const SHAPES = {
 
 /** WMO weather code -> [icon, German description]; clear skies get a moon at night. */
 export function weatherKind(code, night = false) {
-  if (code === null || code === undefined) return ["cloud", "unbekannt"];
-  if (code === 0) return [night ? "moon" : "sun", "klar"];
-  if (code <= 2) return [night ? "partly_night" : "partly", code === 1 ? "überwiegend klar" : "teils bewölkt"];
-  if (code === 3) return ["cloud", "bedeckt"];
-  if (code === 45 || code === 48) return ["fog", "Nebel"];
-  if (code >= 51 && code <= 57) return ["drizzle", "Nieselregen"];
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ["rain", "Regen"];
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ["snow", "Schnee"];
-  if (code >= 95) return ["thunder", "Gewitter"];
-  return ["cloud", "bewölkt"];
+  if (code === null || code === undefined) return ["cloud", t("web.weather.unknown")];
+  if (code === 0) return [night ? "moon" : "sun", t("web.weather.clear")];
+  if (code <= 2) return [night ? "partly_night" : "partly", code === 1 ? t("web.weather.mostly_clear") : t("web.weather.partly_cloudy")];
+  if (code === 3) return ["cloud", t("web.weather.overcast")];
+  if (code === 45 || code === 48) return ["fog", t("web.weather.fog")];
+  if (code >= 51 && code <= 57) return ["drizzle", t("web.weather.drizzle")];
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ["rain", t("web.weather.rain")];
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ["snow", t("web.weather.snow")];
+  if (code >= 95) return ["thunder", t("web.weather.thunder")];
+  return ["cloud", t("web.weather.cloudy")];
 }
 
 /** An <svg> icon; works inside HTML and nested inside another SVG. */
@@ -53,9 +55,9 @@ export function icon(name, { size = 20, x, y, title, className = "icon" } = {}) 
   if (y !== undefined) attrs.y = y;
   for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
   if (title) {
-    const t = document.createElementNS(NS, "title");
-    t.textContent = title;
-    svg.append(t);
+    const titleNode = document.createElementNS(NS, "title");
+    titleNode.textContent = title;
+    svg.append(titleNode);
   } else svg.setAttribute("aria-hidden", "true");
   for (const shape of SHAPES[name] || SHAPES.cloud) {
     let node;

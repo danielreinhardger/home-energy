@@ -1,20 +1,24 @@
-"""Settings defined once: default, label, unit, range and help text in the dataclass field.
+"""Settings defined once: default, unit and range in the dataclass field.
 
-    comfort_temp: float = num(46.0, "Komforttemperatur", "°C", 10, 65, 0.5, "Normales WW Soll Tag.")
+    comfort_temp: float = num(46.0, "°C", 10, 65, 0.5)
 
 The settings forms (config.UI_FIELDS) are generated from these fields, so adding or
-removing a setting is one edit. A field the forms must not show is marked `hidden()`;
-tests/test_config.py checks that every field is one or the other.
+removing a setting is one edit here plus its texts in the catalogs: the label under
+"cfg.<section>.<field>" and an optional help text under "cfg.<section>.<field>.help"
+(homeenergy/lang/*.json, see i18n.py). A field the forms must not show is marked `hidden()`;
+tests/test_settings.py checks that every field is one or the other and has its label.
 """
 from __future__ import annotations
 
 from dataclasses import MISSING, field, fields
 from typing import Any
 
+WORD_UNITS = ("days",)          # units that are words: shown as the text "unit.<code>"
 
-def num(default: float, label: str, unit: str = "", lo: float | None = None, hi: float | None = None,
-        step: float | None = None, help: str = "") -> Any:
-    ui: dict = {"type": "number", "label": label, "unit": unit, "help": help}
+
+def num(default: float, unit: str = "", lo: float | None = None, hi: float | None = None,
+        step: float | None = None) -> Any:
+    ui: dict = {"type": "number", "unit": unit}
     if lo is not None:
         ui["min"] = lo
     if hi is not None:
@@ -24,18 +28,23 @@ def num(default: float, label: str, unit: str = "", lo: float | None = None, hi:
     return field(default=default, metadata={"ui": ui})
 
 
-def flag(default: bool, label: str, help: str = "") -> Any:
-    return field(default=default, metadata={"ui": {"type": "bool", "label": label, "help": help}})
+def flag(default: bool) -> Any:
+    return field(default=default, metadata={"ui": {"type": "bool"}})
 
 
-def clock(default: str, label: str, help: str = "") -> Any:
+def clock(default: str) -> Any:
     """A time of day, "HH:MM"."""
-    return field(default=default, metadata={"ui": {"type": "time", "label": label, "help": help}})
+    return field(default=default, metadata={"ui": {"type": "time"}})
 
 
-def text(default: str, label: str, help: str = "") -> Any:
+def text(default: str) -> Any:
     """A line of text (e.g. an address)."""
-    return field(default=default, metadata={"ui": {"type": "text", "label": label, "help": help}})
+    return field(default=default, metadata={"ui": {"type": "text"}})
+
+
+def choice(default: str, options: dict[str, str]) -> Any:
+    """One of fixed codes; `options` maps each code to the name the form shows."""
+    return field(default=default, metadata={"ui": {"type": "choice", "options": dict(options)}})
 
 
 def hidden(default: Any = MISSING, *, default_factory: Any = MISSING, why: str = "") -> Any:

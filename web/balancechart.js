@@ -2,6 +2,7 @@
 // Stacked: series on top of each other, outwards from the zero line (PV and house next to it).
 // The outer edge is the total, and because production = consumption at every minute,
 // both sides mirror each other. Consumers are negative (axis and tooltip show a minus).
+import { t } from "./i18n.js";
 import { el, fmt, power, dayTime, dateTime } from "./lib.js";
 import { showTip, hideTip, niceTicks, timeTicks } from "./charts.js";
 
@@ -17,17 +18,17 @@ const GAP_MS = 5 * 60 * 1000;          // longer gaps (server down) break the ar
 // Distinct hues within each side (validated all-pairs, style.css); position (above/below zero)
 // separates producers from consumers. Car and feed-in are dashed as a second cue.
 const hp = (d) => Math.min(pos(d.hp_w), pos(d.house_w));            // heat pump is part of the house load
-const PRODUCERS = [
+const PRODUCERS = () => [
   { key: "pv", label: "PV", color: "--prod-pv", get: (d) => pos(d.pv_w) },
-  { key: "bat_out", label: "Batterie entlädt", color: "--prod-bat", get: (d) => pos(d.battery_w) },
-  { key: "grid_in", label: "Netzbezug", color: "--prod-grid", get: (d) => pos(d.grid_w) },
+  { key: "bat_out", label: t("web.balancechart.batterie_entlaedt"), color: "--prod-bat", get: (d) => pos(d.battery_w) },
+  { key: "grid_in", label: t("web.explain.netzbezug"), color: "--prod-grid", get: (d) => pos(d.grid_w) },
 ];
-const CONSUMERS = [
-  { key: "house", label: "Haus (ohne WP)", color: "--cons-house", get: (d) => pos(d.house_w) - hp(d) },
-  { key: "hp", label: "Wärmepumpe", color: "--cons-hp", get: hp },
-  { key: "car", label: "Auto", color: "--cons-car", dashed: true, get: (d) => pos(d.car_w) },
-  { key: "bat_in", label: "Batterie lädt", color: "--cons-bat", get: (d) => pos(-(d.battery_w ?? 0)) },
-  { key: "grid_out", label: "Einspeisung", color: "--cons-grid", dashed: true, get: (d) => pos(-(d.grid_w ?? 0)) },
+const CONSUMERS = () => [
+  { key: "house", label: t("web.balancechart.haus_ohne_wp"), color: "--cons-house", get: (d) => pos(d.house_w) - hp(d) },
+  { key: "hp", label: t("web.overview.waermepumpe"), color: "--cons-hp", get: hp },
+  { key: "car", label: t("web.overview.auto"), color: "--cons-car", dashed: true, get: (d) => pos(d.car_w) },
+  { key: "bat_in", label: t("web.balancechart.batterie_laedt"), color: "--cons-bat", get: (d) => pos(-(d.battery_w ?? 0)) },
+  { key: "grid_out", label: t("web.overview.einspeisung"), color: "--cons-grid", dashed: true, get: (d) => pos(-(d.grid_w ?? 0)) },
 ];
 
 const fmtW = (w) => { const p = power(w); return `${p.v} ${p.u}`; };
@@ -37,21 +38,21 @@ export function balanceLegend(container) {
   const item = (s) => el("span", {}, el("i", { class: `box${s.dashed ? " dashed" : ""}`,
     style: `background:var(${s.color});color:var(${s.color})` }), s.label);
   container.replaceChildren(
-    el("div", { class: "legend-row" }, el("b", {}, "▲ Erzeugung"), PRODUCERS.map(item)),
-    el("div", { class: "legend-row" }, el("b", {}, "▼ Verbrauch"), CONSUMERS.map(item)));
+    el("div", { class: "legend-row" }, el("b", {}, t("web.balancechart.erzeugung")), PRODUCERS().map(item)),
+    el("div", { class: "legend-row" }, el("b", {}, t("web.balancechart.verbrauch")), CONSUMERS().map(item)));
 }
 
 export function balanceChart(container, data) {
   container.replaceChildren();
   if (data.length < 2) {
-    container.append(el("div", { class: "empty" }, "Noch zu wenig Verlauf – es kommt jede Minute ein Messpunkt dazu."));
+    container.append(el("div", { class: "empty" }, t("web.balancechart.noch_zu_wenig_verlauf_es_kommt")));
     return;
   }
   const W = container.clientWidth || 600, H = container.clientHeight || 300;
   const m = { l: 52, r: 12, t: 10, b: 22 };
   const xs = data.map((d) => new Date(d.t).getTime());
-  const up = data.map((d) => PRODUCERS.map((s) => s.get(d)));
-  const down = data.map((d) => CONSUMERS.map((s) => s.get(d)));
+  const up = data.map((d) => PRODUCERS().map((s) => s.get(d)));
+  const down = data.map((d) => CONSUMERS().map((s) => s.get(d)));
   const sum = (r) => r.reduce((a, b) => a + b, 0);
   const maxUp = Math.max(1, ...up.map(sum));
   const maxDown = Math.max(1, ...down.map(sum));
@@ -62,13 +63,13 @@ export function balanceChart(container, data) {
   const Y = (v) => m.t + (1 - (v - y0) / (y1 - y0)) * (H - m.t - m.b);
 
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
-    "aria-label": "Erzeugung oberhalb, Verbrauch unterhalb der Nulllinie" });
+    "aria-label": t("web.balancechart.erzeugung_oberhalb_verbrauch_unterhalb") });
   const axis = svgEl("g", { class: "axis" });
   for (const v of ticks) {
     axis.append(svgEl("line", { class: v === 0 ? "zero" : "gridline", x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }));
-    const t = svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" });
-    t.textContent = v === 0 ? "0" : `${v < 0 ? "−" : ""}${fmt(Math.abs(v) / 1000, Math.abs(y1 - y0) < 4000 ? 1 : 0)} kW`;
-    axis.append(t);
+    const label = svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" });
+    label.textContent = v === 0 ? "0" : `${v < 0 ? "−" : ""}${fmt(Math.abs(v) / 1000, Math.abs(y1 - y0) < 4000 ? 1 : 0)} kW`;
+    axis.append(label);
   }
   for (const { t, label } of timeTicks(x0, x1)) {
     if (t <= x0) continue;
@@ -104,16 +105,16 @@ export function balanceChart(container, data) {
       rows.forEach((r, i) => { below[i] += r[k]; });
     });
   };
-  stack(up, PRODUCERS, 1);
-  stack(down, CONSUMERS, -1);
+  stack(up, PRODUCERS(), 1);
+  stack(down, CONSUMERS(), -1);
 
   const tag = (txt, y, baseline) => {
-    const t = svgEl("text", { class: "side-label", x: m.l + 8, y, "dominant-baseline": baseline });
-    t.textContent = txt;
-    svg.append(t);
+    const label = svgEl("text", { class: "side-label", x: m.l + 8, y, "dominant-baseline": baseline });
+    label.textContent = txt;
+    svg.append(label);
   };
-  tag("▲ Erzeugung", m.t + 4, "hanging");
-  tag("▼ Verbrauch", H - m.b - 6, "auto");
+  tag(t("web.balancechart.erzeugung"), m.t + 4, "hanging");
+  tag(t("web.balancechart.verbrauch"), H - m.b - 6, "auto");
 
   // hover: crosshair + tooltip with every producer and consumer at that minute
   const cross = svgEl("line", { class: "crosshair", y1: m.t, y2: H - m.b, visibility: "hidden" });
@@ -123,18 +124,18 @@ export function balanceChart(container, data) {
     const x = X(xs[i]);
     cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
     const rows = [];
-    PRODUCERS.forEach((s, k) => { if (up[i][k] >= 1) rows.push({ color: `var(${s.color})`, label: `▲ ${s.label}`, value: fmtW(up[i][k]) }); });
-    CONSUMERS.forEach((s, k) => { if (down[i][k] >= 1) rows.push({ color: `var(${s.color})`, label: `▼ ${s.label}`, value: neg(down[i][k]) }); });
+    PRODUCERS().forEach((s, k) => { if (up[i][k] >= 1) rows.push({ color: `var(${s.color})`, label: `▲ ${s.label}`, value: fmtW(up[i][k]) }); });
+    CONSUMERS().forEach((s, k) => { if (down[i][k] >= 1) rows.push({ color: `var(${s.color})`, label: `▼ ${s.label}`, value: neg(down[i][k]) }); });
     if (rows.length) {
-      rows.unshift({ color: "transparent", label: "Summe ▲ / ▼", value: `${fmtW(sum(up[i]))} / ${neg(sum(down[i]))}` });
+      rows.unshift({ color: "transparent", label: t("web.balancechart.summe"), value: `${fmtW(sum(up[i]))} / ${neg(sum(down[i]))}` });
     }
-    showTip(evt, (x1 - x0 > 50 * 3.6e6 ? dateTime : dayTime)(data[i].t), rows.length ? rows : [{ color: "transparent", label: "keine Leistung", value: "" }]);
+    showTip(evt, (x1 - x0 > 50 * 3.6e6 ? dateTime : dayTime)(data[i].t), rows.length ? rows : [{ color: "transparent", label: t("web.balancechart.keine_leistung"), value: "" }]);
   };
   const nearest = (clientX) => {
     const r = svg.getBoundingClientRect();
-    const t = x0 + ((clientX - r.left) * (W / r.width) - m.l) / (W - m.l - m.r) * (x1 - x0);
+    const at = x0 + ((clientX - r.left) * (W / r.width) - m.l) / (W - m.l - m.r) * (x1 - x0);
     let best = 0;
-    xs.forEach((x, i) => { if (Math.abs(x - t) < Math.abs(xs[best] - t)) best = i; });
+    xs.forEach((x, i) => { if (Math.abs(x - at) < Math.abs(xs[best] - at)) best = i; });
     return best;
   };
   let focus = data.length - 1;

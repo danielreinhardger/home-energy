@@ -11,6 +11,8 @@ The last reading is kept in state.json (a battery sensor may report only every s
 """
 from __future__ import annotations
 
+from .i18n import fnum, t
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -43,13 +45,13 @@ class RoomSensor:
 
     def update(self, now: datetime, temp, humidity=None) -> Reading:
         """Store a reading (strings as they come from a URL; '21,5' works too). Raises ValueError."""
-        t = _number(temp, "t")
-        if t is None or not TEMP_RANGE[0] <= t <= TEMP_RANGE[1]:
-            raise ValueError(f"Raumtemperatur fehlt oder liegt außerhalb {TEMP_RANGE[0]:.0f}…{TEMP_RANGE[1]:.0f} °C")
+        temp_c = _number(temp, "t")
+        if temp_c is None or not TEMP_RANGE[0] <= temp_c <= TEMP_RANGE[1]:
+            raise ValueError(t("room.raumtemperatur_fehlt_oder_liegt", value=fnum(TEMP_RANGE[0], 0), value2=fnum(TEMP_RANGE[1], 0)))
         h = _number(humidity, "h")
         if h is not None and not 0 <= h <= 100:
             h = None
-        self.last = Reading(round(t, 2), None if h is None else round(h, 1), now)
+        self.last = Reading(round(temp_c, 2), None if h is None else round(h, 1), now)
         self.count += 1
         return self.last
 
@@ -72,4 +74,4 @@ def _number(value, name: str) -> float | None:
     try:
         return float(str(value).replace(",", "."))
     except ValueError:
-        raise ValueError(f"{name}: Zahl erwartet, bekommen {str(value)[:20]!r}") from None
+        raise ValueError(t("room.zahl_erwartet_bekommen", name=name, value=repr(str(value)[:20]))) from None

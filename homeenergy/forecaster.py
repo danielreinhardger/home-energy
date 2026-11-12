@@ -14,6 +14,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Callable
 
+from .i18n import t
 from .forecast import (Calibration, ForecastSummary, HourlyPv, Weather, fetch_hourly, fetch_weather, outlook,
                        local_day_totals, summarize)
 
@@ -102,7 +103,7 @@ class Forecaster:
         """The 3-day outlook for the page (fetched on demand, not with every state)."""
         with self._lock:
             if not self._cfg().usable or not self.hours:
-                return {"days": [], "error": self.error or "Prognose noch nicht geladen"}
+                return {"days": [], "error": self.error or t("fc.prognose_noch_nicht_geladen")}
             return {"days": outlook(self.hours, self.weather, self._clock(), self.calibration.factor),
                     "fetched_at": self.fetched.isoformat() if self.fetched else None,
                     "calibration": round(self.calibration.factor, 3), "weather": self.weather is not None}

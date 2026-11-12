@@ -11,13 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .rules import de
+from .i18n import fnum, t
+
 
 # openWB component type -> dashboard node kind ("grid" is the public grid above the meter)
 KINDS = {"counter": "meter", "inverter": "inverter", "bat": "battery", "cp": "charger"}
-# short box titles; the device's own name (from openWB) goes into the first detail line
-TITLES = {"meter": "Zähler", "inverter": "Wechselrichter", "battery": "Batterie", "charger": "Wallbox"}
-REDUNDANT = (" Zähler", " Wechselrichter", " Speicher", " Batterie")   # said by the title already
+# short box titles are the texts "flow.title.<kind>"; the device's own name (from openWB) goes
+# into the first detail line, without a trailing word the title already says (openWB names, German or English)
+REDUNDANT = (" Zähler", " Wechselrichter", " Speicher", " Batterie", " Meter", " Counter", " Inverter", " Battery")
 
 
 @dataclass
@@ -50,7 +51,7 @@ def _f(v: Any) -> float | None:
 def _fmt_w(w: float | None) -> str:
     if w is None:
         return "–"
-    return f"{de(w / 1000, 2)} kW" if abs(w) >= 1000 else f"{w:.0f} W"
+    return f"{fnum(w / 1000, 2)} kW" if abs(w) >= 1000 else f"{w:.0f} W"
 
 
 def build_flow(hierarchy: list | None, names: dict[int, str], powers: dict[int, float | None],
@@ -74,7 +75,7 @@ def build_flow(hierarchy: list | None, names: dict[int, str], powers: dict[int, 
         kind = KINDS.get(n.get("type"), "meter")
         nid = f"c{n['id']}"
         flow_in = consumption(n)
-        node = Node(nid, kind, TITLES.get(kind, kind), parent)
+        node = Node(nid, kind, t(f"flow.title.{kind}"), parent)
         node.name = names.get(n["id"]) or ""
         for word in REDUNDANT:
             node.name = node.name.removesuffix(word)
@@ -83,7 +84,7 @@ def build_flow(hierarchy: list | None, names: dict[int, str], powers: dict[int, 
             pv_id = f"pv{n['id']}"
             node.power_w = None if flow_in is None else -flow_in        # AC output
             nodes.append(node)
-            nodes.append(Node(pv_id, "pv", "PV-Module", nid, None if gen is None else -gen))
+            nodes.append(Node(pv_id, "pv", t("flow.pv_module"), nid, None if gen is None else -gen))
             edges.append(Edge(pv_id, nid, None if gen is None else max(0.0, -gen)))
         else:
             node.power_w = flow_in
@@ -96,16 +97,16 @@ def build_flow(hierarchy: list | None, names: dict[int, str], powers: dict[int, 
     roots = hierarchy or []
     for root in roots:
         grid_w = _f(powers.get(root["id"]))
-        nodes.append(Node("utility", "grid", "Stromnetz", None, grid_w))
+        nodes.append(Node("utility", "grid", t("flow.stromnetz"), None, grid_w))
         add(root, "utility")
         root_id = f"c{root['id']}"
         root_node = next(x for x in nodes if x.id == root_id)
-        root_node.label = "Netzanschluss"
-        house = Node("house", "house", "Haus", root_id, home_w)
+        root_node.label = t("flow.netzanschluss")
+        house = Node("house", "house", t("flow.haus"), root_id, home_w)
         nodes.append(house)
         _edge(edges, root_id, "house", home_w)
         hp_w = _f(isg.get("hp_power_w")) if isg else None
-        hp = Node("heatpump", "heatpump", "Wärmepumpe", "house", hp_w)
+        hp = Node("heatpump", "heatpump", t("flow.waermepumpe"), "house", hp_w)
         nodes.append(hp)
         edges.append(Edge("house", "heatpump", None if hp_w is None else max(0.0, hp_w)))
         break  # one grid connection
@@ -130,21 +131,21 @@ def build_balance(nodes: list[Node], min_w: float = 5.0) -> dict:
             continue
         if n.kind == "grid":
             (sources if w > 0 else sinks).append(
-                {"kind": "grid", "label": "Netzbezug" if w > 0 else "Einspeisung", "w": abs(w)})
+                {"kind": "grid", "label": t("flow.netzbezug") if w > 0 else t("flow.einspeisung"), "w": abs(w)})
         elif n.kind == "pv":
             sources.append({"kind": "pv", "label": "PV", "w": w})
         elif n.kind == "battery":
             (sinks if w > 0 else sources).append(
-                {"kind": "battery", "label": "Batterie laden" if w > 0 else "Batterie entladen", "w": abs(w)})
+                {"kind": "battery", "label": t("flow.batterie_laden") if w > 0 else t("flow.batterie_entladen"), "w": abs(w)})
         elif n.kind == "charger":
-            sinks.append({"kind": "charger", "label": "Auto", "w": w})
+            sinks.append({"kind": "charger", "label": t("flow.auto"), "w": w})
         elif n.kind == "house":
             hp = next((x.power_w for x in nodes if x.kind == "heatpump" and x.power_w is not None), None)
             hp = min(max(0.0, hp), w) if hp is not None else 0.0          # the heat pump is part of the house load
             if w - hp >= min_w:
-                sinks.append({"kind": "house", "label": "Haus (ohne WP)" if hp else "Haus", "w": w - hp})
+                sinks.append({"kind": "house", "label": t("flow.haus_ohne_wp") if hp else t("flow.haus"), "w": w - hp})
             if hp >= min_w:
-                sinks.append({"kind": "heatpump", "label": "Wärmepumpe", "w": hp})
+                sinks.append({"kind": "heatpump", "label": t("flow.waermepumpe"), "w": hp})
     return {"sources": sources, "sinks": sinks,
             "total_w": max(sum(s["w"] for s in sources), sum(s["w"] for s in sinks))}
 
@@ -157,14 +158,14 @@ def _roles(nodes: list[Node]) -> None:
         if n.kind == "pv":
             n.role, n.role_text = ("idle", "ruht") if idle else ("source", "erzeugt")
         elif n.kind == "battery":
-            n.role, n.role_text = ("idle", "ruht") if idle else (("sink", "lädt") if w > 0 else ("source", "entlädt"))
+            n.role, n.role_text = ("idle", "ruht") if idle else (("sink", t("flow.laedt")) if w > 0 else ("source", t("flow.entlaedt")))
         elif n.kind == "grid":
-            n.role, n.role_text = ("idle", "ausgeglichen") if idle else (("source", "Bezug") if w > 0 else ("sink", "Einspeisung"))
+            n.role, n.role_text = ("idle", "ausgeglichen") if idle else (("source", t("flow.bezug")) if w > 0 else ("sink", t("flow.einspeisung")))
         elif n.kind in ("house", "charger"):
             n.role, n.role_text = ("idle", "ruht") if idle else ("sink", "verbraucht")
         elif n.kind == "heatpump":
             if n.power_w is None:
-                n.role, n.role_text = "sink", "Teil des Hauses"
+                n.role, n.role_text = "sink", t("flow.teil_des_hauses")
             else:
                 n.role, n.role_text = ("sink", "verbraucht") if n.power_w >= 20 else ("idle", "ruht")
         else:  # meter, inverter
@@ -175,7 +176,7 @@ def fallback_hierarchy() -> tuple[list, dict[int, str]]:
     """Topology to use when openWB is unreachable: grid meter → inverter → battery."""
     return ([{"id": 0, "type": "counter", "children": [
         {"id": 2, "type": "inverter", "children": [{"id": 4, "type": "bat", "children": []}]}]}],
-        {0: "Kostal-Zähler", 2: "Kostal Plenticore", 4: "Kostal-Batterie"})
+        {0: t("flow.kostal_zaehler"), 2: "Kostal Plenticore", 4: t("flow.kostal_batterie")})
 
 
 def kostal_powers(k: dict) -> tuple[dict[int, float | None], float | None]:
@@ -204,40 +205,42 @@ def _describe(nodes: list[Node], k: dict, i: dict, o: dict) -> None:
             pass
         elif n.kind == "pv":
             if k.get("dc1_power") is not None:
-                d.append(f"String 1: {_fmt_w(k['dc1_power'])} · String 2: {_fmt_w(k.get('dc2_power'))}")
+                d.append(t("flow.strings", dc1=_fmt_w(k["dc1_power"]), dc2=_fmt_w(k.get("dc2_power"))))
             if k.get("yield_day") is not None:
-                d.append(f"heute {de(k['yield_day'])} kWh")
+                d.append(t("flow.heute_kwh", yield_day=fnum(k['yield_day'])))
         elif n.kind == "meter":
-            d.append(n.name or "Zähler")
+            d.append(n.name or t("flow.zaehler"))
         elif n.kind == "inverter":
-            d.append(n.name or "AC-Leistung")
+            d.append(n.name or t("flow.ac_leistung"))
         elif n.kind == "battery":
             if k.get("battery_soc") is not None:
-                d.append(f"{k['battery_soc']:.0f} % von 10,2 kWh")
+                cap = k.get("battery_capacity")
+                d.append(t("flow.battery_soc_of", soc=fnum(k["battery_soc"], 0), kwh=fnum(cap / 1000, 1)) if cap
+                         else t("flow.battery_soc", soc=fnum(k["battery_soc"], 0)))
             if n.name:
                 d.append(n.name)
         elif n.kind == "charger":
             plugged = o.get("cp_plugged")
             state = None if plugged is None else (
-                ("lädt" if o.get("cp_charging") == "ja" else "angesteckt") if plugged == "ja" else "kein Fahrzeug")
+                (t("flow.laedt") if o.get("cp_charging") == 1 else t("flow.angesteckt")) if plugged == 1 else t("flow.kein_fahrzeug"))
             d.append(" · ".join(x for x in (n.name, o.get("cp_mode")) if x))
-            today = None if o.get("cp_daily") is None else f"heute {de(o['cp_daily'])} kWh"
+            today = None if o.get("cp_daily") is None else t("flow.heute_kwh_2", cp_daily=fnum(o['cp_daily']))
             d.append(" · ".join(x for x in (state, today) if x))
             n.details = [x for x in d if x]
         elif n.kind == "house":
-            d.append("ohne Ladepunkt")
+            d.append(t("flow.ohne_ladepunkt"))
         elif n.kind == "heatpump":
-            dhw = None if i.get("dhw_temp") is None else de(i["dhw_temp"])
-            flow = None if i.get("flow_temp") is None else de(i["flow_temp"])
+            dhw = None if i.get("dhw_temp") is None else fnum(i["dhw_temp"])
+            flow = None if i.get("flow_temp") is None else fnum(i["flow_temp"])
             kw, hz = i.get("compressor_kw"), i.get("compressor_hz")
             if kw and hz:                       # running: the live compressor first (FACHMANN page, every minute)
                 cop = i.get("cop_live")
-                d.append(" · ".join(x for x in (f"Verdichter {de(kw, 2)} kW", f"{hz:.0f} Hz",
-                                                cop and f"COP {de(cop)}") if x))
-                d.append(" · ".join(x for x in (dhw and f"WW {dhw} °C", flow and f"Vorlauf {flow} °C") if x))
+                d.append(" · ".join(x for x in (t("flow.verdichter_kw", kw=fnum(kw, 2)), f"{fnum(hz, 0)} Hz",
+                                                cop and t("flow.cop", cop=fnum(cop))) if x))
+                d.append(" · ".join(x for x in (dhw and t("flow.dhw_short", dhw=dhw), flow and t("flow.vorlauf_c", flow=flow)) if x))
             else:
                 if dhw:
-                    d.append(f"Warmwasser {dhw} °C (Soll {de(i.get('dhw_target') or 0)})")
+                    d.append(t("flow.warmwasser_c_soll", dhw=dhw, value=fnum(i.get('dhw_target') or 0)))
                 if flow:
-                    ret = f" → {de(i['return_temp'])}" if i.get("return_temp") is not None else ""
-                    d.append(f"Fußbodenheizung {flow}{ret} °C")
+                    ret = f" → {fnum(i['return_temp'])}" if i.get("return_temp") is not None else ""
+                    d.append(t("flow.fussbodenheizung_c", flow=flow, ret=ret))

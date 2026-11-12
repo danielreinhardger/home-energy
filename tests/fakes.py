@@ -80,3 +80,26 @@ class FakeModbusServer:
     def __exit__(self, *exc):
         self.server.shutdown()
         self.server.server_close()
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def use_language(code):
+    """Run a block in one language (the catalogs' language is global), then restore it."""
+    from homeenergy import i18n
+    before = i18n.language()
+    i18n.set_language(code)
+    try:
+        yield
+    finally:
+        i18n.set_language(before)
+
+
+def german_config(path):
+    """A config file that only sets the language to German (unless the test wrote one already)."""
+    import json
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"ui": {"language": "de"}}), encoding="utf-8")

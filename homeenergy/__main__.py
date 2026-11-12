@@ -8,8 +8,10 @@ import sys
 from pathlib import Path
 
 from . import config as config_mod
+from . import i18n
 from .device import ModbusDevice
 from .devices import SPECS
+from .registers import setting_label
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = config_mod.load(args.config)
+    i18n.set_language(cfg.ui.language)
 
     if args.cmd == "serve":
         from .service import Service
@@ -57,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.reconfigure(encoding="utf-8")
             print(json.dumps(out, ensure_ascii=False, indent=2))
         else:
-            print(f"{dev.setting(args.key).label}: {dev.write_setting(args.key, args.value)}")
+            print(f"{setting_label(args.device, args.key)}: {dev.write_setting(args.key, args.value)}")
     finally:
         dev.close()
     return 0

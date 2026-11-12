@@ -3,6 +3,7 @@
 // the steps and their texts that live next to those rules (hotwater.stages(), heating.stages(),
 // sent as state.*.explain) and the merit order the server computes from the prices and the
 // heat pump's own COPs – so this page only draws; it holds no copy of the rules.
+import { locale, t } from "./i18n.js";
 import { api, el, fmt, deNum } from "./lib.js";
 import { icon } from "./icons.js";
 
@@ -12,15 +13,15 @@ const svgEl = (tag, attrs = {}) => {
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
   return n;
 };
-const svgText = (attrs, s) => { const t = svgEl("text", attrs); t.textContent = s; return t; };
+const svgText = (attrs, s) => { const node = svgEl("text", attrs); node.textContent = s; return node; };
 const ct = (eur) => `${fmt(eur * 100, 1)} ct`;
 
 const USE_ICON = { house: "house", heating: "heatpump", dhw_daily: "heatpump", battery: "battery", dhw_extra: "heatpump", export: "grid" };
 
 function chip(result) {
-  if (result === undefined) return el("span", { class: "x-chip skip" }, "– nicht erreicht");
-  if (result.ok === null) return el("span", { class: "x-chip skip" }, "– nicht geprüft");
-  return result.ok ? el("span", { class: "x-chip yes" }, "✓ ja") : el("span", { class: "x-chip no" }, "✗ nein");
+  if (result === undefined) return el("span", { class: "x-chip skip" }, t("web.explain.nicht_erreicht"));
+  if (result.ok === null) return el("span", { class: "x-chip skip" }, t("web.explain.nicht_geprueft"));
+  return result.ok ? el("span", { class: "x-chip yes" }, t("web.explain.ja")) : el("span", { class: "x-chip no" }, t("web.explain.nein"));
 }
 
 /**
@@ -31,7 +32,7 @@ function chip(result) {
  */
 function liveFlow(last, x) {
   const { stages: st, outcomes, off: offText } = x;
-  if (!last) return el("p", { class: "msg" }, "Die erste Entscheidung folgt innerhalb einer Minute.");
+  if (!last) return el("p", { class: "msg" }, t("web.explain.die_erste_entscheidung_folgt_innerhalb"));
   const trace = last.trace || [];
   const byNode = Object.fromEntries(trace.map((r) => [r.node, r]));
   const outIdx = trace.findIndex((r) => /(^|_)out_/.test(r.node));
@@ -47,7 +48,7 @@ function liveFlow(last, x) {
     const isReached = reached(s), decided = s.id === decidedId;
     wrap.append(el("section", { class: `x-stage${isReached ? " reached" : " skipped"}${decided ? " decided" : ""}` },
       el("header", {}, icon(s.icon, { size: 22 }), el("h3", {}, s.title),
-        gateRes ? chip(gateRes) : null, s.and ? el("span", { class: "x-and" }, "alle müssen ✓ sein") : null),
+        gateRes ? chip(gateRes) : null, s.and ? el("span", { class: "x-and" }, t("web.explain.alle_muessen_sein")) : null),
       el("p", { class: "x-intro" }, s.intro),
       gateRes ? el("p", { class: "x-live" }, deNum(gateRes.detail)) : null,
       el("ol", { class: "x-checks" }, s.checks.map(([node, q, why]) => {
@@ -55,16 +56,16 @@ function liveFlow(last, x) {
         const r = isReached && (!s.gate || gateRes?.ok) ? byNode[node] : undefined;
         return el("li", { class: r ? (r.ok === null ? "skip" : r.ok ? "yes" : "no") : "unreached" },
           chip(r), el("div", {}, el("b", {}, q), el("span", { class: "x-why" }, why),
-            r ? el("span", { class: "x-live" }, `Jetzt: ${deNum(r.detail)}`) : null));
+            r ? el("span", { class: "x-live" }, t("web.explain.jetzt", { deNum: deNum(r.detail) })) : null));
       })),
       s.fallback ? el("p", { class: "x-intro" }, s.fallback) : null));
     if (i < st.length - 1) {
       const flowsOn = isReached && !decided && reached(st[i + 1]);
-      wrap.append(el("div", { class: `x-arrow${flowsOn ? " on" : ""}` }, "↓ ", s.gateNo || "nicht alle ✓ → weiter"));
+      wrap.append(el("div", { class: `x-arrow${flowsOn ? " on" : ""}` }, "↓ ", s.gateNo || t("web.explain.nicht_alle_weiter")));
     }
   });
   wrap.append(el("div", { class: "x-result" },
-    el("span", {}, "Ergebnis jetzt"),
+    el("span", {}, t("web.explain.ergebnis_jetzt")),
     el("b", {}, `${outcomes[out?.node] || last.mode} → ${fmt(last.target, 1)} °C`),
     el("span", { class: "x-why" }, deNum(last.reasons.join(" · ")))));
   return wrap;
@@ -74,17 +75,17 @@ function liveFlow(last, x) {
 export function copLine(eco) {
   if (!eco) return null;
   return el("p", { class: "flow-source" },
-    `COP Heizen jetzt ${fmt(eco.cop_heating, 1)}${eco.cop_outside !== null && eco.cop_outside !== undefined ? ` bei ${fmt(eco.cop_outside, 1)} °C außen` : ""} ` +
-    `(LWZ 5 S Plus: Datenblatt-Kurve × ${fmt(eco.cop_scale, 2)} nach den eigenen Zählern) · Warmwasser ${fmt(eco.cop_dhw, 2)} · ` +
-    `COP-Vorteil am Tag ${fmt(eco.day_cop_gain * 100, 0)} %${!eco.day_gain_from_forecast ? " (Standardwert)"
-      : eco.day_gain_measured ? " (Prognose + eigene Messung)" : " (Prognose + Datenblatt)"} · ` +
-    (eco.cop_live ? `gemessen: ${fmt(eco.cop_live.per_k, 2)} COP je K, ${fmt(eco.cop_live.minutes / 60, 0)} h Heizen bei ` +
+    t("web.explain.cop_heizen_jetzt", { eco: fmt(eco.cop_heating, 1), eco2: eco.cop_outside !== null && eco.cop_outside !== undefined ? t("web.explain.bei_c_aussen", { eco: fmt(eco.cop_outside, 1) }) : "" }) +
+    t("web.explain.lwz_5_s_plus_datenblatt_kurve", { eco: fmt(eco.cop_scale, 2), eco2: fmt(eco.cop_dhw, 2) }) +
+    t("web.explain.cop_vorteil_am_tag", { eco: fmt(eco.day_cop_gain * 100, 0), eco2: !eco.day_gain_from_forecast ? t("web.explain.standardwert")
+      : eco.day_gain_measured ? t("web.explain.prognose_eigene_messung") : t("web.explain.prognose_datenblatt") }) +
+    (eco.cop_live ? t("web.explain.gemessen_cop_je_k_h_heizen", { eco: fmt(eco.cop_live.per_k, 2), eco2: fmt(eco.cop_live.minutes / 60, 0) }) +
       `${fmt(eco.cop_live.range[0], 0)}…${fmt(eco.cop_live.range[1], 0)} °C · ` : "") +
     `Kurve: ${eco.cop_curve.map((p) => `${p.t} °C → ${fmt(p.cop, 1)}`).join(", ")}`);
 }
 
 export function meritBars(eco) {
-  if (!eco) return el("p", { class: "msg" }, "Lädt …");
+  if (!eco) return el("p", { class: "msg" }, t("web.html.laedt"));
   const max = Math.max(...eco.merit_order.map((u) => u.value));
   const feed = eco.prices.feed;
   return el("div", { class: "x-merit", role: "list" }, eco.merit_order.map((u, i) =>
@@ -94,9 +95,9 @@ export function meritBars(eco) {
       el("div", { class: "x-merit-label" }, el("b", {}, u.label), el("span", {}, u.note)),
       el("div", { class: "x-merit-track" },
         el("div", { class: "x-merit-bar", style: `width:${(100 * u.value / max).toFixed(1)}%` }),
-        el("div", { class: "x-merit-feed", style: `left:${(100 * feed / max).toFixed(1)}%`, title: "Einspeisevergütung" })),
+        el("div", { class: "x-merit-feed", style: `left:${(100 * feed / max).toFixed(1)}%`, title: t("web.explain.einspeiseverguetung") })),
       el("span", { class: "x-merit-val" }, `${ct(u.value)}/kWh`,
-        u.key === "export" ? null : el("small", {}, ` +${ct(u.gain_vs_feed)} ggü. Einspeisen`)))));
+        u.key === "export" ? null : el("small", {}, t("web.explain.ggue_einspeisen", { ct: ct(u.gain_vs_feed) }))))));
 }
 
 // ---- schematic days: what the targets do over 24 h -------------------------------------------
@@ -127,37 +128,37 @@ function dayChart(title, segs, unitRange, pvPeak, note) {
 
 function typicalDays(c, h) {
   const lo = h.room_min, hi = h.room_max;
-  const winter = dayChart("Wintertag: Raumziel HK1 (Fußbodenheizung)",
-    [[0, 9.5, lo, "Absenkung – Wärme vom Vortag"], [9.5, 15, hi, "PV heizt vor"], [15, 24, lo, "Absenkung bis morgen"]],
-    [lo - 0.5, hi + 0.5], 0.9, "Vorheizen nur bei Sonne, nachts trägt die gespeicherte Wärme");
+  const winter = dayChart(t("web.explain.wintertag_raumziel_hk1_fussbodenheizung"),
+    [[0, 9.5, lo, t("web.explain.absenkung_waerme_vom_vortag")], [9.5, 15, hi, t("web.explain.pv_heizt_vor")], [15, 24, lo, t("web.explain.absenkung_bis_morgen")]],
+    [lo - 0.5, hi + 0.5], 0.9, t("web.explain.vorheizen_nur_bei_sonne_nachts_traegt"));
   const summer = dayChart("Sommertag: Warmwasserziel",
-    [[0, 10, c.min_temp, "Warten auf Sonne"], [10, 12, c.comfort_temp, "Tagesbedarf mit PV"],
-     [12, 24, c.min_temp, "Warten auf morgen"]],
-    [c.min_temp - 4, c.boost_temp + 2], 1, "Tagesbedarf mittags mit PV, kein Überheizen");
+    [[0, 10, c.min_temp, t("web.explain.warten_auf_sonne")], [10, 12, c.comfort_temp, t("web.explain.tagesbedarf_mit_pv")],
+     [12, 24, c.min_temp, t("web.explain.warten_auf_morgen")]],
+    [c.min_temp - 4, c.boost_temp + 2], 1, t("web.explain.tagesbedarf_mittags_mit_pv_kein"));
   return el("div", { class: "x-days" }, winter, summer);
 }
 
 function knobs(c, h, eco) {
   const rows = [
-    ["Strompreis / Einspeisung", `${ct(eco?.prices.buy ?? 0)} / ${ct(eco?.prices.feed ?? 0)}`, "Grundlage der Reihenfolge."],
-    ["COP Heizen / Warmwasser", `${fmt(eco?.cop_heating, 1)} / ${fmt(eco?.cop_dhw, 1)}`, "Aus den Zählern der Wärmepumpe – deshalb geht im Winter das Haus vor."],
-    ["Raum Minimum / normal / Puffer-Maximum", `${fmt(h.room_min, 1)} / ${fmt(h.normal_temp, 1)} / ${fmt(h.room_max, 1)} °C`, "Komfortband der Fußbodenheizung; Puffer je nach Sonne."],
-    ["Batterie gilt als voll ab", `${fmt(h.soc_full, 0)} %`, "Bis dahin geht die Batterie vor; das Haus heizt nur vor, wenn sie heute sicher voll wird."],
-    ["Warmwasser Minimum / Tagesbedarf / Vorrat", `${fmt(c.min_temp, 0)} / ${fmt(c.comfort_temp, 0)} / ${fmt(c.boost_temp, 0)} °C`, "Vorrat nur vor einem trüben Tag."],
-    ["Trüber Tag unter", `${fmt(c.poor_day_kwh, 1)} kWh`, "Entscheidet über Vorrat und Absenkung."],
+    [t("web.explain.strompreis_einspeisung"), `${ct(eco?.prices.buy ?? 0)} / ${ct(eco?.prices.feed ?? 0)}`, t("web.explain.grundlage_der_reihenfolge")],
+    [t("web.explain.cop_heizen_warmwasser"), `${fmt(eco?.cop_heating, 1)} / ${fmt(eco?.cop_dhw, 1)}`, t("web.explain.aus_den_zaehlern_der_waermepumpe_deshalb")],
+    [t("web.explain.raum_minimum_normal_puffer_maximum"), `${fmt(h.room_min, 1)} / ${fmt(h.normal_temp, 1)} / ${fmt(h.room_max, 1)} °C`, t("web.explain.komfortband_der_fussbodenheizung_puffer")],
+    [t("web.explain.batterie_gilt_als_voll_ab"), `${fmt(h.soc_full, 0)} %`, t("web.explain.bis_dahin_geht_die_batterie_vor")],
+    [t("web.explain.warmwasser_minimum_tagesbedarf_vorrat"), `${fmt(c.min_temp, 0)} / ${fmt(c.comfort_temp, 0)} / ${fmt(c.boost_temp, 0)} °C`, t("web.explain.vorrat_nur_vor_einem_trueben_tag")],
+    [t("web.explain.trueber_tag_unter"), `${fmt(c.poor_day_kwh, 1)} kWh`, t("web.explain.entscheidet_ueber_vorrat_und_absenkung")],
   ];
-  return el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Einstellung"), el("th", { class: "num" }, "Wert"), el("th", {}, "Wirkung"))),
+  return el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Einstellung"), el("th", { class: "num" }, t("web.explain.wert")), el("th", {}, "Wirkung"))),
     el("tbody", {}, rows.map(([a, b, w]) => el("tr", {}, el("td", {}, a), el("td", { class: "num" }, b), el("td", {}, w)))));
 }
 
 let simCache = null, simLoading = false;
 export function simulationCard() {
-  const box = el("div", {}, el("p", { class: "msg" }, "Simulation läuft …"));
-  const intro = el("p", { class: "x-intro" }, "Dieselben Regeln wie unter „So funktioniert's“, minütlich gegen ein einfaches Modell von Haus " +
-    "(KfW 40+, 20 kWh/K Speicher), Warmwasserspeicher, Batterie und PV gerechnet – verglichen mit festen Werten " +
-    "(Raum normal, Warmwasser Komfort). Kosten pro Tag: Netzbezug × Strompreis − Einspeisung × Vergütung. Modellwerte, keine Messung.");
+  const box = el("div", {}, el("p", { class: "msg" }, t("web.explain.simulation_laeuft")));
+  const intro = el("p", { class: "x-intro" }, t("web.explain.dieselben_regeln_wie_unter_so") +
+    t("web.explain.kfw_40_20_kwh_k_speicher") +
+    t("web.explain.raum_normal_warmwasser_komfort_kosten"));
   const draw = (rows) => box.replaceChildren(intro, el("div", { class: "table-wrap" }, el("table", {},
-    el("thead", {}, el("tr", {}, ["Modelltag", "COP Heizen", "Feste Werte", "Strategie", "Ersparnis", "WP nachts", "Netzbezug", "Raum"].map((h, i) =>
+    el("thead", {}, el("tr", {}, ["Modelltag", t("web.explain.cop_heizen"), t("web.explain.feste_werte"), "Strategie", "Ersparnis", "WP nachts", t("web.explain.netzbezug"), t("web.overview.raum")].map((h, i) =>
       el("th", { class: i ? "num" : "" }, h)))),
     el("tbody", {}, rows.map((r) => el("tr", {},
       el("td", {}, r.scenario),
@@ -181,28 +182,28 @@ export function simulationCard() {
 export function renderExplain(root, state) {
   if (root.contains(document.activeElement)) return;
   const c = state.controller.config, h = state.heating?.config, eco = state.economy;
-  const stamp = (d) => (d ? ` Stand ${new Date(d.time).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}.` : "");
+  const stamp = (d) => (d ? t("web.explain.stand", { d: new Date(d.time).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }) }) : "");
   root.replaceChildren(
-    el("article", { class: "card" }, el("h2", {}, "Die Rechnung: was eine kWh Sonnenstrom wert ist"),
-      el("p", { class: "x-intro" }, `Netzstrom kostet ${ct(eco?.prices.buy ?? 0)}, Einspeisen bringt ${ct(eco?.prices.feed ?? 0)}. ` +
-        "Jede kWh, die eine spätere kWh aus Netz oder Batterie ersetzt, ist also fast viermal so viel wert wie eingespeist. " +
-        "Gespeicherte Wärme zählt aber nur, wenn sie vor der nächsten Sonne gebraucht wird – sonst verdrängt sie nur morgigen Gratis-Strom."),
+    el("article", { class: "card" }, el("h2", {}, t("web.explain.die_rechnung_was_eine_kwh_sonnenstrom")),
+      el("p", { class: "x-intro" }, t("web.explain.netzstrom_kostet_einspeisen_bringt", { ct: ct(eco?.prices.buy ?? 0), ct2: ct(eco?.prices.feed ?? 0) }) +
+        t("web.explain.jede_kwh_die_eine_spaetere_kwh") +
+        t("web.explain.gespeicherte_waerme_zaehlt_aber_nur_wenn")),
       meritBars(eco), copLine(eco),
-      el("p", { class: "x-intro" }, "Was das in Euro bringt, zeigt der Tab „Finanzen“. Die Plätze 2–4 liegen fast gleichauf: Sie verlegen Wärme bzw. Strom, der ohnehin gebraucht wird, in die Sonnenstunden. " +
-        "Im Winter heizt die Regelung trotzdem zuerst das Haus vor – dort passt mit Abstand am meisten hinein (mehrere kWh Strom pro Tag statt ~1 kWh Warmwasser). " +
-        "Darum gibt es keinen 55-°C-Boost mehr: Warmwasser über den Bedarf hat den schlechtesten COP und lohnt nur vor einem trüben Tag. " +
-        "Im Winter ist das Haus selbst der beste Speicher: Estrich und Bodenplatte nehmen die Wärme mit COP ~4,6 auf, das KfW-40+-Haus verliert über Nacht nur etwa 1–1,5 K.")),
-    h ? el("article", { class: "card" }, el("h2", {}, "1 · Heizen (zuerst)"),
-      el("p", { class: "x-intro" }, "Jede Minute zuerst: Soll das Haus mit PV vorgeheizt werden – oder darf es ohne PV etwas abkühlen?" +
-        stamp(state.heating.last) + (h.apply ? "" : " Testbetrieb: es wird nur angezeigt.")),
+      el("p", { class: "x-intro" }, t("web.explain.was_das_in_euro_bringt_zeigt") +
+        t("web.explain.im_winter_heizt_die_regelung_trotzdem") +
+        t("web.explain.darum_gibt_es_keinen_55_c") +
+        t("web.explain.im_winter_ist_das_haus_selbst"))),
+    h ? el("article", { class: "card" }, el("h2", {}, t("web.explain.1_heizen_zuerst")),
+      el("p", { class: "x-intro" }, t("web.explain.jede_minute_zuerst_soll_das_haus") +
+        stamp(state.heating.last) + (h.apply ? "" : t("web.explain.testbetrieb_es_wird_nur_angezeigt"))),
       liveFlow(state.heating.last, state.heating.explain)) : null,
-    el("article", { class: "card" }, el("h2", {}, "2 · Warmwasser"),
-      el("p", { class: "x-intro" }, "Danach das Warmwasser: Tagesbedarf mit PV, Vorrat nur vor einem trüben Tag." + stamp(state.controller.last)),
+    el("article", { class: "card" }, el("h2", {}, t("web.explain.2_warmwasser")),
+      el("p", { class: "x-intro" }, t("web.explain.danach_das_warmwasser_tagesbedarf_mit_pv") + stamp(state.controller.last)),
       liveFlow(state.controller.last, state.controller.explain)),
-    h ? el("article", { class: "card" }, el("h2", {}, "Ein typischer Tag"),
-      el("p", { class: "x-intro" }, "Schematisch: Linie = Ziel der Regelung, Fläche = PV-Erzeugung. Die Batterie bleibt für die Haushaltsgeräte am Abend."),
+    h ? el("article", { class: "card" }, el("h2", {}, t("web.explain.ein_typischer_tag")),
+      el("p", { class: "x-intro" }, t("web.explain.schematisch_linie_ziel_der_regelung")),
       typicalDays(c, h)) : null,
-    el("article", { class: "card" }, el("h2", {}, "Die wichtigsten Stellschrauben"),
+    el("article", { class: "card" }, el("h2", {}, t("web.explain.die_wichtigsten_stellschrauben")),
       el("div", { class: "table-wrap" }, h ? knobs(c, h, eco) : null),
-      el("p", { class: "x-intro" }, "Ändern unter „PV-Regelung“. Jede Regelung schreibt höchstens alle 10–15 min und begrenzt pro Tag; beim Ausschalten wird der Normalwert zurückgeschrieben.")));
+      el("p", { class: "x-intro" }, t("web.explain.aendern_unter_pv_regelung_jede_regelung"))));
 }

@@ -11,6 +11,8 @@ import struct
 from dataclasses import dataclass, field
 from typing import Callable, Literal, Sequence
 
+from . import i18n
+
 Table = Literal["input", "holding"]
 Words = Sequence[int]
 Decoder = Callable[[Words], "float | int | str | None"]
@@ -69,9 +71,8 @@ def bits(w: Words):
 # -- definitions --------------------------------------------------------------
 @dataclass(frozen=True)
 class Point:
-    """A read-only value."""
+    """A read-only value. Its label is the text "dev.<device>.<key>" (see point_label)."""
     key: str
-    label: str
     register: int                 # vendor register number (see DeviceSpec.register_base)
     decode: Decoder
     unit: str = ""
@@ -79,7 +80,7 @@ class Point:
     words: int = 1
     table: Table = "input"
     digits: int = 1               # display precision hint for the UI
-    options: dict[int, str] = field(default_factory=dict)   # status codes: the text the page shows
+    options: tuple = ()           # status codes with a text "dev.<device>.<key>.<code>"
 
 
 @dataclass(frozen=True)
@@ -89,9 +90,9 @@ class Setting:
     `verified` says how we know the register is the one the device page shows:
     "write-test" (written and seen on the page), "value-match" (unique current
     value matches the page) or "" (unverified: shown read-only).
+    Texts: label "dev.<device>.set.<key>", optional note "….note", options "….<code>".
     """
     key: str
-    label: str
     register: int
     group: str
     unit: str = ""
@@ -99,9 +100,8 @@ class Setting:
     minimum: float = 0
     maximum: float = 0
     step: float = 1
-    options: dict[int, str] = field(default_factory=dict)
+    options: tuple = ()           # the allowed codes (texts: see above)
     verified: str = ""
-    note: str = ""
 
     @property
     def writable(self) -> bool:
@@ -113,25 +113,25 @@ class Setting:
         v = raw - 0x10000 if raw >= 0x8000 else raw
         return v if self.scale == 1 else round(v * self.scale, 3)
 
-    def encode(self, value: float) -> int:
-        """Validate a user value and convert it to the raw register value."""
+    def encode(self, value: float, label: str) -> int:
+        """Validate a user value and convert it to the raw register value (`label` names it in errors)."""
         if self.options:
             if int(value) not in self.options or int(value) != value:
-                raise ValueError(f"{self.label}: {value} ist keine gültige Option")
+                raise ValueError(i18n.t("setting.error.option", label=label, value=value))
             return int(value)
         if not self.minimum <= value <= self.maximum:
-            raise ValueError(f"{self.label}: {value} außerhalb {self.minimum}..{self.maximum} {self.unit}")
+            raise ValueError(i18n.t("setting.error.range", label=label, value=value, lo=self.minimum,
+                                    hi=self.maximum, unit=self.unit))
         steps = round((value - self.minimum) / self.step)
         if abs(self.minimum + steps * self.step - value) > 1e-6:
-            raise ValueError(f"{self.label}: {value} passt nicht in {self.step}er-Schritte")
+            raise ValueError(i18n.t("setting.error.step", label=label, value=value, step=self.step))
         raw = round(value / self.scale)
         return raw & 0xFFFF
 
 
 @dataclass(frozen=True)
 class DeviceSpec:
-    key: str
-    name: str
+    key: str                      # its name is the text "dev.<key>.name"
     port: int
     unit_id: int
     register_base: int            # 1 when the vendor numbers registers from 1
@@ -139,10 +139,41 @@ class DeviceSpec:
     settings: tuple[Setting, ...] = ()
     settings_table: Table = "holding"
     read_max_gap: int = 8         # how many unmapped registers a block read may span
-    page_only: tuple[str, ...] = ()  # options on the device's own page with no Modbus register
+    page_only: tuple[str, ...] = ()  # options only on the device's own page: "dev.<key>.page_only.<code>"
 
     def address(self, register: int) -> int:
         return register - self.register_base
+
+
+# -- texts (from the catalogs, see i18n.py) ---------------------------------------
+def device_name(device: str) -> str:
+    return i18n.t(f"dev.{device}.name")
+
+
+def point_label(device: str, key: str) -> str:
+    return i18n.t(f"dev.{device}.{key}")
+
+
+def setting_label(device: str, key: str) -> str:
+    return i18n.t(f"dev.{device}.set.{key}")
+
+
+def setting_note(device: str, key: str) -> str:
+    k = f"dev.{device}.set.{key}.note"
+    return i18n.t(k) if i18n.has(k) else ""
+
+
+def group_label(code: str) -> str:
+    return i18n.t(f"group.{code}")
+
+
+def option_texts(prefix: str, codes) -> dict[str, str]:
+    """{code: text} for the codes of a point or setting (`prefix` = its label key)."""
+    return {str(c): i18n.t(f"{prefix}.{c}") for c in codes}
+
+
+def page_only_texts(device: str, codes) -> list[str]:
+    return [i18n.t(f"dev.{device}.page_only.{c}") for c in codes]
 
 
 # -- block planning -----------------------------------------------------------

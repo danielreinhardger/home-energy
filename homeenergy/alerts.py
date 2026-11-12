@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable
 
-from .rules import de
+
+from .controller import FAILED
+from .i18n import fnum, t
 from .settings import num, text
 
 log = logging.getLogger(__name__)
@@ -25,16 +27,10 @@ TITLE = "Smarthome 28"
 
 @dataclass
 class AlertConfig:
-    push_url: str = text('', 'Push-Adresse',
-                         'ntfy-Thema, z. B. https://ntfy.sh/ein-langes-geheimes-wort (App „ntfy“ auf dem Handy, '
-                         'dasselbe Thema abonnieren). Leer = Hinweise nur hier auf der Seite.')
-    device_minutes: float = num(10, 'Gerät ohne Daten ab', 'min', 2, 240, 1,
-                                'So lange darf ein Gerät schweigen, bevor es gemeldet wird.')
-    dhw_low_temp: float = num(36, 'Warmwasser zu kalt unter', '°C', 25, 50, 0.5,
-                              'Gemeldet, wenn der Speicher 30 Minuten lang kälter ist.')
-    backup_kwh: float = num(1, 'Heizstab melden ab', 'kWh', 0, 50, 1,
-                            'Pro Tag, einmal. Der Heizstab macht Strom 1:1 zu Wärme – etwa dreimal so teuer '
-                            'wie die Wärmepumpe. 0 = nie melden.')
+    push_url: str = text('')
+    device_minutes: float = num(10, 'min', 2, 240, 1)
+    dhw_low_temp: float = num(36, '°C', 25, 50, 0.5)
+    backup_kwh: float = num(1, 'kWh', 0, 50, 1)
 
 
 @dataclass(frozen=True)
@@ -46,20 +42,20 @@ class Problem:
 
 def detect(cfg: AlertConfig, devices: dict[str, tuple[str, bool, str | None]], dhw_temp: float | None,
            last_actions: dict[str, str], forecast_error: str | None, forecast_age_h: float | None) -> list[Problem]:
-    """The problems right now. devices: key -> (name, fresh, error); last_actions: controller -> action text."""
+    """The problems right now. devices: key -> (name, fresh, error); last_actions: controller -> (outcome code, action text)."""
     out = []
     for key, (name, fresh, error) in devices.items():
         if not fresh or error:
-            out.append(Problem(f"device:{key}", f"{name}: keine Daten ({error or 'keine Antwort'})",
+            out.append(Problem(f"device:{key}", t("alert.keine_daten", name=name, value=error or t("alert.keine_antwort")),
                                cfg.device_minutes))
-    for kind, action in last_actions.items():
-        if action.startswith("Fehler beim Schreiben"):
-            name = {"heating": "Raumtemperatur", "dhw_power": "WW-Leistung"}.get(kind, "Warmwasser-Soll")
-            out.append(Problem(f"write:{kind}", f"{name} konnte nicht an die Wärmepumpe gesendet werden: {action}", 0))
+    for kind, (outcome, action) in last_actions.items():
+        if outcome == FAILED:
+            name = t(f"alert.write_target.{kind}")
+            out.append(Problem(f"write:{kind}", t("alert.konnte_nicht_an_die_waermepumpe_gesendet", name=name, action=action), 0))
     if dhw_temp is not None and dhw_temp < cfg.dhw_low_temp:
-        out.append(Problem("dhw:cold", f"Warmwasser nur {de(dhw_temp)} °C (unter {de(cfg.dhw_low_temp)} °C)", 30))
+        out.append(Problem("dhw:cold", t("alert.warmwasser_nur_c_unter_c", dhw_temp=fnum(dhw_temp), dhw_low_temp=fnum(cfg.dhw_low_temp)), 30))
     if forecast_error and (forecast_age_h is None or forecast_age_h > 3):
-        out.append(Problem("forecast", f"Wetterprognose nicht abrufbar: {forecast_error}", 0))
+        out.append(Problem("forecast", t("alert.wetterprognose_nicht_abrufbar", forecast_error=forecast_error), 0))
     return out
 
 
@@ -67,7 +63,7 @@ def send_push(url: str, message: str, title: str = TITLE, tags: str = "", priori
               opener: Callable = urllib.request.urlopen) -> None:
     """POST the message as plain text (ntfy reads Title/Tags/Priority from the headers)."""
     if not url.startswith(("http://", "https://")):
-        raise ValueError("Push-Adresse muss mit http:// oder https:// beginnen")
+        raise ValueError(t("alert.push_adresse_muss_mit_http_oder"))
     headers = {"Title": title, "Priority": priority, "User-Agent": "home-energy"}
     if tags:
         headers["Tags"] = tags
@@ -112,8 +108,7 @@ class BackupWatch:
         self.today = {k: round(totals[k] - self.start[k], 1) for k in totals}
         if threshold_kwh > 0 and not self.notified and self.total >= threshold_kwh:
             self.notified = True
-            return (f"Heizstab lief heute: {self.total:.0f} kWh "
-                    f"(Heizen {self.today['heating']:.0f}, Warmwasser {self.today['dhw']:.0f})")
+            return (t("alert.heizstab_lief_heute_kwh_heizen", total=fnum(self.total, 0), heating=fnum(self.today['heating'], 0), dhw=fnum(self.today['dhw'], 0)))
         return None
 
 
@@ -146,21 +141,21 @@ class Alerts:
         for key in [k for k in self.active if k not in current]:
             text_ = self.active.pop(key)["text"]
             self._event("over", text_, now)
-            self._notify(cfg, f"✓ behoben: {text_}", "white_check_mark", "default")
+            self._notify(cfg, t("alert.behoben", text=text_), "white_check_mark", "default")
 
     def notice(self, cfg: AlertConfig, text_: str, tags: str = "zap") -> None:
         """A one-off note (no start/end), e.g. the backup heater ran: history, error log and push."""
         now = self._clock()
         self.history.appendleft({"kind": "notice", "text": text_, "time": now.isoformat(timespec="minutes")})
-        log.warning("Hinweis: %s", text_)
+        log.warning(t("alert.log_notice", text=text_))
         self._notify(cfg, text_, tags, "default")
 
     def _event(self, kind: str, text_: str, now: datetime) -> None:
         self.history.appendleft({"kind": kind, "text": text_, "time": now.isoformat(timespec="minutes")})
         if kind == "start":
-            log.warning("Hinweis: %s", text_)
+            log.warning(t("alert.log_notice", text=text_))
         else:
-            log.info("behoben: %s", text_, extra={"event": True})
+            log.info(t("alert.behoben_s"), text_, extra={"event": True})
 
     def _notify(self, cfg: AlertConfig, message: str, tags: str, priority: str) -> None:
         if not cfg.push_url:

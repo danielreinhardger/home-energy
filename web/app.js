@@ -3,7 +3,8 @@
 // Each tab draws itself in its own module: overview.js (with timeline.js for the charts),
 // controltab.js, explain.js, finance.js, details.js, logtab.js; the settings forms come from forms.js.
 import { time } from "./lib.js";
-import { loadState } from "./state.js";
+import { applyStatic, t } from "./i18n.js";
+import { loadMeta, loadState } from "./state.js";
 import { setupTimeline, setTimelineState, refreshHistory, refreshLong, renderCharts } from "./timeline.js";
 import { renderOverview } from "./overview.js";
 import { renderLogs, loadSettings } from "./controltab.js";
@@ -38,11 +39,11 @@ async function refreshState() {
     render(state);
     const errs = Object.values(state.devices)
       .filter((d) => d.error || d.stale)
-      .map((d) => `${d.name}: ${d.error || "keine aktuellen Daten – Regelung pausiert"}`);
+      .map((d) => `${d.name}: ${d.error || t("web.app.keine_aktuellen_daten_regelung_pausiert")}`);
     $("status").textContent = errs.length ? errs.join(" · ") : `aktualisiert ${time(state.now)}`;
     $("status").className = `status${errs.length ? " err" : ""}`;
   } catch (err) {
-    $("status").textContent = `Server nicht erreichbar: ${err.message}`;
+    $("status").textContent = t("web.app.server_nicht_erreichbar", { message: err.message });
     $("status").className = "status err";
   }
 }
@@ -63,6 +64,8 @@ function renderTab(name, s) {
 }
 
 // ---- start ------------------------------------------------------------------
+applyStatic();                                    // cached texts until the server's arrive
+try { await loadMeta(); } catch {}                // the texts first: everything below draws with them
 for (const btn of document.querySelectorAll(".tabs button")) btn.addEventListener("click", () => selectTab(btn.dataset.tab));
 setupTimeline();
 setupLog();
