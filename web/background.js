@@ -273,7 +273,10 @@ function build(THREE) {
   function size() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(window.innerWidth, window.innerHeight, false);
-    cam.aspect = window.innerWidth / window.innerHeight; zoom = Math.max(1, .62 / cam.aspect);   // narrow screens: stay close to the house and let the plot's edges run off the sides cam.updateProjectionMatrix();
+    cam.aspect = window.innerWidth / window.innerHeight;
+    // portrait screens: go by the house, not the plot – it fills most of the width, mast and car may run off the sides
+    const near = clamp(.46 / cam.aspect, .8, 1.4);
+    zoom = cam.aspect >= 1.2 ? 1 : cam.aspect <= .9 ? near : near + (1 - near) * (cam.aspect - .9) / .3; cam.updateProjectionMatrix();
   }
   function frame(now) {
     if (now - last < 1000 / FPS - 2) return;                         // called at display rate, drawn at FPS

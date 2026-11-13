@@ -73,6 +73,15 @@ setupTimeline();
 setupLog();
 setupOutlook();
 setupBackground();
+// Phones: the header (title, wrapped tabs, status) takes a third of the screen, so it slides away
+// while scrolling down and comes back on scrolling up (style.css: .top.away, narrow screens only).
+let lastY = 0;
+window.addEventListener("scroll", () => {
+  const y = window.scrollY;
+  if (Math.abs(y - lastY) < 8) return;                // ignore jitter
+  document.querySelector(".top").classList.toggle("away", y > lastY && y > 80);
+  lastY = y;
+}, { passive: true });
 let saved = "overview";
 try { saved = localStorage.getItem("tab") || saved; } catch {}
 selectTab(saved);

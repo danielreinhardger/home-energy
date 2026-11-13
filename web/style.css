@@ -358,3 +358,10 @@ button.icon-btn { display: inline-grid; place-items: center; width: 44px; height
 .has-bg .card { background: color-mix(in srgb, var(--surface-1) 88%, transparent); }
 .has-bg .top { background: color-mix(in srgb, var(--surface-1) 94%, transparent); }
 .has-bg .intro, .has-bg main > .tab > .msg { background: color-mix(in srgb, var(--surface-1) 88%, transparent); border-radius: var(--radius); padding: 10px 14px; }
+
+/* phones: the header slides out of the way while scrolling down (app.js) */
+@media (max-width: 720px) {
+  .top { transition: transform .2s ease; }
+  .top.away { transform: translateY(-100%); }
+}
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) { .top { transition: none; } }
