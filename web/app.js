@@ -14,6 +14,7 @@ import { renderDetails } from "./details.js";
 import { renderAlerts } from "./alerts.js";
 import { setupLog, refreshLog } from "./logtab.js";
 import { setupOutlook } from "./outlook.js";
+import { setupBackground, updateBackground } from "./background.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -52,6 +53,7 @@ function render(s) {
   renderAlerts(s.alerts);
   setTimelineState(s);
   renderTab(current, s);
+  try { updateBackground(s); } catch (err) { console.warn(err); }   // decoration: never in the way of the page
 }
 
 // What each tab draws from the state (the others fetch their own data: finance ledger, log, settings).
@@ -70,6 +72,7 @@ for (const btn of document.querySelectorAll(".tabs button")) btn.addEventListene
 setupTimeline();
 setupLog();
 setupOutlook();
+setupBackground();
 let saved = "overview";
 try { saved = localStorage.getItem("tab") || saved; } catch {}
 selectTab(saved);

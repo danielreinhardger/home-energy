@@ -146,6 +146,7 @@ def meta(svc: "Service") -> dict:
                     for key, dev in svc.poller.devices.items()},
         "explain": {"dhw": explain(hotwater_rules, cfg.dhw), "heating": explain(heating_rules, cfg.heating)},
         "language": i18n.language(), "locale": i18n.locale(), "texts": i18n.web_texts(),
+        "background": cfg.ui.background,
     }
     raw = json.dumps(body, sort_keys=True, ensure_ascii=False).encode()
     out = {"version": hashlib.sha1(raw).hexdigest()[:12], **body}

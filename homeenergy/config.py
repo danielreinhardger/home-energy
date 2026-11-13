@@ -15,7 +15,7 @@ from .economics import EconomyConfig
 from .heating import HeatingConfig
 from .hotwater import DhwConfig
 from . import i18n
-from .settings import choice, ui_fields
+from .settings import choice, flag, ui_fields
 
 
 @dataclass
@@ -29,6 +29,7 @@ class DeviceHosts:
 @dataclass
 class UiConfig:
     language: str = choice(i18n.DEFAULT, {code: lang["name"] for code, lang in i18n.LANGUAGES.items()})
+    background: bool = flag(True)          # the animated house and weather behind the pages
 
     def validate(self) -> None:
         if self.language not in i18n.LANGUAGES:

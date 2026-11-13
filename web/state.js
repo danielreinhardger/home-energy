@@ -24,5 +24,6 @@ export async function loadState() {
   }
   s.controller.explain = meta.explain.dhw;
   s.heating.explain = meta.explain.heating;
+  s.background = meta.background;               // Display setting: animated background on/off
   return s;
 }
