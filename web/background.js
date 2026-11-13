@@ -273,7 +273,7 @@ function build(THREE) {
   function size() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(window.innerWidth, window.innerHeight, false);
-    cam.aspect = window.innerWidth / window.innerHeight; zoom = Math.max(1, 1.45 / cam.aspect); cam.updateProjectionMatrix();
+    cam.aspect = window.innerWidth / window.innerHeight; zoom = Math.max(1, .62 / cam.aspect);   // narrow screens: stay close to the house and let the plot's edges run off the sides cam.updateProjectionMatrix();
   }
   function frame(now) {
     if (now - last < 1000 / FPS - 2) return;                         // called at display rate, drawn at FPS
