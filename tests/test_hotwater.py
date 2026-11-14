@@ -14,9 +14,9 @@ def fc(remaining_kwh=20.0, tomorrow_kwh=30.0, sun_hours=6.0):
     return ForecastSummary(NOON, 1.0, remaining_kwh * 1000, 40000, tomorrow_kwh * 1000, sun_hours, [])
 
 
-def inputs(now=NOON, grid=-2000.0, battery=0.0, soc=100.0, dhw=40.0, forecast=None, season=False, heat_boost=False):
+def inputs(now=NOON, grid=-2000.0, battery=0.0, soc=100.0, dhw=40.0, forecast=None, season=False, heat_boost=False, compressor=None):
     sit = Situation(now, pv_w=4000, grid_w=grid, battery_w=battery, soc=soc, max_soc=100,
-                    battery_capacity_wh=10240, dhw_temp=dhw, forecast=forecast)
+                    battery_capacity_wh=10240, dhw_temp=dhw, forecast=forecast, compressor_w=compressor)
     return DhwInputs(sit, heating_season=season, heating_boost=heat_boost)
 
 
@@ -130,6 +130,16 @@ class ReserveTests(unittest.TestCase):
         self.assertNotEqual(d.mode, Mode.BOOST)
         d, _ = run(minutes(6, dhw=46.0, forecast=fc(tomorrow_kwh=3), season=True, heat_boost=False))
         self.assertEqual(d.mode, Mode.BOOST)
+
+    def test_idle_preheating_leaves_the_surplus_to_hot_water(self):
+        # the house is "being preheated", but the heat pump stands still: the surplus would only be exported
+        idle = dict(dhw=46.0, forecast=fc(tomorrow_kwh=3), season=True, heat_boost=True)
+        d, _ = run(minutes(6, compressor=0.0, **idle))
+        self.assertEqual(d.mode, Mode.BOOST)
+        d, _ = run(minutes(6, compressor=900.0, **idle))            # the heat pump is working for the house
+        self.assertNotEqual(d.mode, Mode.BOOST)
+        d, _ = run(minutes(6, compressor=None, **idle))             # no reading: as before, the house first
+        self.assertNotEqual(d.mode, Mode.BOOST)
 
 
 class StopTests(unittest.TestCase):
