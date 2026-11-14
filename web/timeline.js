@@ -64,13 +64,15 @@ export function setTimelineState(state) {
 export async function refreshHistory() {
   try {
     const last = view.history.at(-1)?.t;
-    if (!last) view.history = fromColumns(await api("/api/history?format=columns"));
-    else {
-      const fresh = fromColumns(await api(`/api/history?since=${Math.floor(last / 1000)}&format=columns`));
-      if (!fresh.length) return;
-      const cut = Date.now() - HISTORY_MS;
-      view.history = view.history.concat(fresh).filter((d) => d.t >= cut);
-    }
+    const loaded = fromColumns(await api(last ? `/api/history?since=${Math.floor(last / 1000)}&format=columns`
+      : "/api/history?format=columns"));
+    // Two refreshes can overlap (returning to the tab fires one, the minute timer another): both asked
+    // from the same last minute, so take only what is newer than what the page holds by now.
+    const have = view.history.at(-1)?.t ?? -Infinity;
+    const fresh = loaded.filter((d) => d.t > have);
+    if (!fresh.length) return;
+    const cut = Date.now() - HISTORY_MS;
+    view.history = view.history.concat(fresh).filter((d) => d.t >= cut);
     renderCharts();
   } catch {}
 }
