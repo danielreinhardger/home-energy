@@ -44,6 +44,7 @@ from .situation import Situation
 from .settings import clock, flag, num
 
 WATER_WH_PER_L_K = 1.163
+HOUSE_IDLE_W = 100.0                # compressor below this while the house is preheated: the heat pump stands still
 
 
 class DhwMode(str, Enum):
@@ -299,7 +300,10 @@ def _decide(inp: DhwInputs, cfg: DhwConfig, prev: DhwState) -> tuple[Decision, D
 
     # 2) anti-legionella: due -> with PV like a reserve; overdue -> in the warmest hours anyway
     due, overdue, last = hygiene_status(cfg, prev, now)
-    house_free = not inp.heating_season or not inp.heating_boost
+    # the house comes first only while the heat pump really works for it: a preheat that stands still
+    # (target reached, no demand) would just leave the surplus to the grid
+    house_idle = inp.heating_boost and sit.compressor_w is not None and sit.compressor_w < HOUSE_IDLE_W
+    house_free = not inp.heating_season or not inp.heating_boost or house_idle
     if cfg.hygiene_enabled:
         hyg_need_wh = dhw_energy_wh(cfg, sit.dhw_temp, cfg.hygiene_temp)
         hyg_battery = sit.soc >= cfg.soc_boost_min or sit.battery_fills(cfg.soc_boost_min, cfg.battery_fill_safety,
@@ -322,9 +326,10 @@ def _decide(inp: DhwInputs, cfg: DhwConfig, prev: DhwState) -> tuple[Decision, D
              t("dhw.morgen_kwh_pv_trueb_unter_kwh", tomorrow_kwh=fnum(fc.tomorrow_wh / 1000, 1), poor_day_kwh=fnum(cfg.poor_day_kwh, 0)) if fc is not None
              else t("dhw.keine_prognose_kein_vorrat"))
     tr.check("battery", battery_ok, battery_reason)
-    house_ok = not inp.heating_season or not inp.heating_boost
-    tr.check("house_first", house_ok, t("dhw.heizperiode_haus_wird_gerade_mit_pv")
-             if not house_ok else (t("dhw.haus_braucht_den_ueberschuss_nicht") if inp.heating_season else t("dhw.keine_heizperiode")))
+    house_ok = house_free
+    tr.check("house_first", house_ok, t("dhw.heizperiode_haus_wird_gerade_mit_pv") if not house_ok
+             else t("dhw.vorheizen_ruht_waermepumpe_steht", compressor_w=fnum(sit.compressor_w, 0)) if inp.heating_season and house_idle
+             else (t("dhw.haus_braucht_den_ueberschuss_nicht") if inp.heating_season else t("dhw.keine_heizperiode")))
     worth = sit.dhw_temp < cfg.boost_temp - 2.0
     tr.check("reserve_need", worth, t("dhw.speicher_c_vorrat_bis_c", dhw_temp=fnum(sit.dhw_temp, 1), boost_temp=fnum(cfg.boost_temp, 1)))
     if dull_tomorrow and battery_ok and house_ok and worth and held:

@@ -478,6 +478,7 @@
  "dhw.vorrat_vor_einem_trueben_tag": "Reserve before a dull day?",
  "dhw.vorrat_vor_truebem_tag": "Reserve before a dull day",
  "dhw.vorrat_vor_truebem_tag_kwh_morgen": "Reserve before a dull day ({tomorrow_kwh} kWh tomorrow): {boost_temp} °C",
+ "dhw.vorheizen_ruht_waermepumpe_steht": "The house is being preheated, but the heat pump is idle ({compressor_w} W) – the surplus is free",
  "dhw.w_frei_fuer_warmwasser_schwelle_w": "{usable_w} W free for hot water (threshold {needed_w} W)",
  "dhw.w_frei_schwelle_w": "{surplus_w} W free (threshold {needed_w} W",
  "dhw.w_pv_frei": "{usable_w} W PV free",

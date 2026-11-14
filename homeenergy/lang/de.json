@@ -478,6 +478,7 @@
  "dhw.vorrat_vor_einem_trueben_tag": "Vorrat vor einem trüben Tag?",
  "dhw.vorrat_vor_truebem_tag": "Vorrat vor trübem Tag",
  "dhw.vorrat_vor_truebem_tag_kwh_morgen": "Vorrat vor trübem Tag ({tomorrow_kwh} kWh morgen): {boost_temp} °C",
+ "dhw.vorheizen_ruht_waermepumpe_steht": "Haus wird vorgeheizt, aber die Wärmepumpe steht ({compressor_w} W) – der Überschuss ist frei",
  "dhw.w_frei_fuer_warmwasser_schwelle_w": "{usable_w} W frei für Warmwasser (Schwelle {needed_w} W)",
  "dhw.w_frei_schwelle_w": "{surplus_w} W frei (Schwelle {needed_w} W",
  "dhw.w_pv_frei": "{usable_w} W PV frei",
