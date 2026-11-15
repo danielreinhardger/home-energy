@@ -48,15 +48,12 @@ function powersFrom(flow) {
            house: Math.max(0, sum.house || 0), hp: Math.max(0, sum.heatpump || 0) };
 }
 
-// Two switches: the installation's setting (Display → animated background, for everyone) and this
-// device's own choice (the header button, kept in this browser), e.g. off on an old tablet.
-const DEVICE_KEY = "background";
+// One switch: the setting Display → animated background.
 let allowed = true;
-const deviceOff = () => { try { return localStorage.getItem(DEVICE_KEY) === "off"; } catch { return false; } };
 
-/** Starts or stops the scene to match both switches, and shows the header button's state. */
+/** Starts or stops the scene to match the setting. */
 function apply() {
-  const on = allowed && !deviceOff();
+  const on = allowed;
   if (on && !stage && !loading && !failed) {
     loading = true;
     import(THREE_URL).then((THREE) => { stage = build(THREE); document.body.classList.add("has-bg"); })
@@ -65,16 +62,6 @@ function apply() {
   } else if (!on && stage) {
     stage.dispose(); stage = null; document.body.classList.remove("has-bg");
   }
-  const btn = document.getElementById("bg-toggle");
-  if (btn) { btn.hidden = !allowed || failed; btn.setAttribute("aria-pressed", on); }
-}
-
-/** The header button: this device's own on/off. */
-export function setupBackground() {
-  document.getElementById("bg-toggle")?.addEventListener("click", () => {
-    try { deviceOff() ? localStorage.removeItem(DEVICE_KEY) : localStorage.setItem(DEVICE_KEY, "off"); } catch {}
-    apply();
-  });
 }
 
 /** Called with every new state: feeds the scene, and starts or stops it with the settings. */
@@ -357,11 +344,15 @@ function build(THREE) {
 
   window.addEventListener("resize", size);
   size();
-  renderer.setAnimationLoop(frame);                                  // the browser stops calling it while the tab is hidden
+  // Draw only while the page is visible. Browsers pause the frame callback in a hidden tab themselves,
+  // but an embedded view (app shell, wall panel) may keep calling it – so stop the loop explicitly.
+  const run = () => renderer.setAnimationLoop(document.hidden ? null : frame);
+  document.addEventListener("visibilitychange", run);
+  run();
   canvas.hidden = false;
   return {
     dispose() {
-      renderer.setAnimationLoop(null); window.removeEventListener("resize", size); canvas.hidden = true;
+      document.removeEventListener("visibilitychange", run); renderer.setAnimationLoop(null); window.removeEventListener("resize", size); canvas.hidden = true;
       scene.traverse((obj) => {
         obj.geometry?.dispose();
         for (const m of [].concat(obj.material || [])) { for (const v of Object.values(m)) if (v?.isTexture) v.dispose(); m.dispose(); }

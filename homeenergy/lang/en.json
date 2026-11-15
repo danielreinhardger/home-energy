@@ -895,7 +895,6 @@
  "web.html.finanzen": "Finance",
  "web.html.geraete_einstellungen": "Device settings",
  "web.html.heute": "Today",
- "web.html.hintergrund": "Background",
  "web.html.hinweise_push": "Alerts & push",
  "web.html.intro_after": "off = test mode, only shown.",
  "web.html.intro_before": "The control uses the hot water tank as a heat battery: with PV surplus it is heated, before sunny hours it waits for the sun, so the house battery isn't drained for hot water.",

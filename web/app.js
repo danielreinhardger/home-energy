@@ -14,7 +14,7 @@ import { renderDetails } from "./details.js";
 import { renderAlerts } from "./alerts.js";
 import { setupLog, refreshLog } from "./logtab.js";
 import { setupOutlook } from "./outlook.js";
-import { setupBackground, updateBackground } from "./background.js";
+import { updateBackground } from "./background.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -72,7 +72,6 @@ for (const btn of document.querySelectorAll(".tabs button")) btn.addEventListene
 setupTimeline();
 setupLog();
 setupOutlook();
-setupBackground();
 // Phones: the header (title, wrapped tabs, status) takes a third of the screen, so it slides away
 // while scrolling down and comes back on scrolling up (style.css: .top.away, narrow screens only).
 let lastY = 0;
