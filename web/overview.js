@@ -69,11 +69,14 @@ function renderTiles(s) {
   const hpW = e.hp_w, hpRuns = hpW !== null && hpW !== undefined && hpW >= 50;
   const backup = s.backup_heater ? (s.backup_heater.heating ?? 0) + (s.backup_heater.dhw ?? 0) : 0;
   const hpToday = (web.power_heating_day ?? 0) + (web.power_dhw_day ?? 0) + backup;
+  // the heat pump has its own tile, so the house tile shows the rest (as in the balance chart)
+  const hpKnown = hpW !== null && hpW !== undefined && e.house_w !== null && e.house_w !== undefined;
+  const houseW = hpKnown ? e.house_w - Math.min(Math.max(0, hpW), Math.max(0, e.house_w)) : e.house_w;
   const copToday = (heat, pow) => (pow >= 0.5 && heat >= pow ? fmt(heat / pow, 1) : "–");
 
   clear($("tiles-energy"),
     tile("PV", p(e.pv_w).v, p(e.pv_w).u, t("web.overview.heute", { ko: fmt(ko.yield_day, 1, "kWh") }), "--prod-pv"),
-    tile(t("web.overview.haus"), p(e.house_w).v, p(e.house_w).u, t("web.overview.ohne_wallbox_mit_waermepumpe"), "--cons-house"),
+    tile(t("web.overview.haus"), p(houseW).v, p(houseW).u, null, "--cons-house"),
     tile(t("web.overview.waermepumpe"), hpW === null || hpW === undefined ? "–" : p(hpW).v, hpW === null || hpW === undefined ? "" : p(hpW).u,
       hpW === null || hpW === undefined ? t("web.overview.messung_startet_2_min")
         : t("web.overview.heute_kwh_heizen_ww", { hpRuns: hpRuns ? t("web.overview.laeuft") : t("web.overview.aus"), kwh: kwh(hpToday), kwh2: kwh(web.power_heating_day), kwh3: kwh(web.power_dhw_day) }) +

@@ -13,6 +13,7 @@ const svgEl = (tag, attrs = {}) => {
 const text = (attrs, content) => { const node = svgEl("text", attrs); node.textContent = content; return node; };
 
 const NODE_W = 176, NODE_H = 100, COL_GAP = 22, ROW_GAP = 46;
+const GRID_H = 66;                  // the public grid has no detail lines: a shorter box saves height
 // role colours: producers blue, consumers orange (see style.css)
 const SOURCE_COLOR = { pv: "--prod-pv", battery: "--prod-bat", grid: "--prod-grid" };
 const SINK_COLOR = { house: "--cons-house", heatpump: "--cons-hp", charger: "--cons-car", battery: "--cons-bat", grid: "--cons-grid" };
@@ -34,11 +35,13 @@ function layout(nodes) {
     n.col = (n.children[0].col + n.children[n.children.length - 1].col) / 2;
   };
   roots.forEach((r) => place(r, 0));
+  const topH = roots.every((r) => r.kind === "grid" && !r.details.length) ? GRID_H : NODE_H;
   for (const n of byId.values()) {
     n.x = n.col * (NODE_W + COL_GAP);
-    n.y = n.depth * (NODE_H + ROW_GAP);
+    n.h = n.depth ? NODE_H : topH;
+    n.y = n.depth ? topH + ROW_GAP + (n.depth - 1) * (NODE_H + ROW_GAP) : 0;
   }
-  return { byId, width: col * (NODE_W + COL_GAP) - COL_GAP, height: (depthMax + 1) * (NODE_H + ROW_GAP) - ROW_GAP };
+  return { byId, width: col * (NODE_W + COL_GAP) - COL_GAP, height: topH + depthMax * (NODE_H + ROW_GAP) };
 }
 
 export function renderFlow(container, flow) {
@@ -63,7 +66,7 @@ export function renderFlow(container, flow) {
     if (!a || !b) continue;
     // draw from the upper node to the lower one; the animation direction follows the flow
     const [up, down] = a.depth <= b.depth ? [a, b] : [b, a];
-    const x1 = up.x + NODE_W / 2, y1 = up.y + NODE_H, x2 = down.x + NODE_W / 2, y2 = down.y;
+    const x1 = up.x + NODE_W / 2, y1 = up.y + up.h, x2 = down.x + NODE_W / 2, y2 = down.y;
     const ym = (y1 + y2) / 2;
     const d = `M${x1},${y1} V${ym} H${x2} V${y2}`;
     const active = e.w !== null && e.w >= 20;
@@ -92,7 +95,7 @@ export function renderFlow(container, flow) {
     const color = `var(${nodeColor(n)})`;
     const g = svgEl("g", { class: `flow-node kind-${n.kind} role-${n.role || "pass"}`, transform: `translate(${n.x},${n.y})`,
       style: `--node-color:${color}` });
-    g.append(svgEl("rect", { width: NODE_W, height: NODE_H, rx: 10, class: "flow-box" }));
+    g.append(svgEl("rect", { width: NODE_W, height: n.h, rx: 10, class: "flow-box" }));
     const ic = icon(n.kind, { size: 20, x: 12, y: 10, className: "flow-icon" });
     g.append(ic);
     const label = n.label.length > 19 ? `${n.label.slice(0, 18)}…` : n.label;

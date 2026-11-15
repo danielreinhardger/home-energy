@@ -16,8 +16,8 @@ from .i18n import fnum, t
 
 # openWB component type -> dashboard node kind ("grid" is the public grid above the meter)
 KINDS = {"counter": "meter", "inverter": "inverter", "bat": "battery", "cp": "charger"}
-# short box titles are the texts "flow.title.<kind>"; the device's own name (from openWB) goes
-# into the first detail line, without a trailing word the title already says (openWB names, German or English)
+# short box titles are the texts "flow.title.<kind>"; the device's own name (from openWB) is kept on the
+# node without a trailing word the title already says (openWB names, German or English), but not shown
 REDUNDANT = (" Zähler", " Wechselrichter", " Speicher", " Batterie", " Meter", " Counter", " Inverter", " Battery")
 
 
@@ -31,7 +31,7 @@ class Node:
     details: list[str] = field(default_factory=list)
     role: str = ""                 # source | sink | idle | pass
     role_text: str = ""
-    name: str = ""                 # the device's own name (openWB), shown as a detail
+    name: str = ""                 # the device's own name (openWB); the boxes don't show it
 
 
 @dataclass
@@ -111,6 +111,7 @@ def build_flow(hierarchy: list | None, names: dict[int, str], powers: dict[int, 
         edges.append(Edge("house", "heatpump", None if hp_w is None else max(0.0, hp_w)))
         break  # one grid connection
 
+    nodes.sort(key=lambda n: n.kind == "charger")     # stable: the wallbox stands to the right of the house
     _describe(nodes, kostal, isg, openwb)
     _roles(nodes)
     return {
@@ -209,26 +210,22 @@ def _describe(nodes: list[Node], k: dict, i: dict, o: dict) -> None:
             if k.get("yield_day") is not None:
                 d.append(t("flow.heute_kwh", yield_day=fnum(k['yield_day'])))
         elif n.kind == "meter":
-            d.append(n.name or t("flow.zaehler"))
+            d.append(t("flow.zaehler"))
         elif n.kind == "inverter":
-            d.append(n.name or t("flow.ac_leistung"))
+            d.append(t("flow.ac_leistung"))
         elif n.kind == "battery":
             if k.get("battery_soc") is not None:
                 cap = k.get("battery_capacity")
                 d.append(t("flow.battery_soc_of", soc=fnum(k["battery_soc"], 0), kwh=fnum(cap / 1000, 1)) if cap
                          else t("flow.battery_soc", soc=fnum(k["battery_soc"], 0)))
-            if n.name:
-                d.append(n.name)
         elif n.kind == "charger":
             plugged = o.get("cp_plugged")
             state = None if plugged is None else (
                 (t("flow.laedt") if o.get("cp_charging") == 1 else t("flow.angesteckt")) if plugged == 1 else t("flow.kein_fahrzeug"))
-            d.append(" · ".join(x for x in (n.name, o.get("cp_mode")) if x))
+            d.append(o.get("cp_mode"))
             today = None if o.get("cp_daily") is None else t("flow.heute_kwh_2", cp_daily=fnum(o['cp_daily']))
             d.append(" · ".join(x for x in (state, today) if x))
             n.details = [x for x in d if x]
-        elif n.kind == "house":
-            d.append(t("flow.ohne_ladepunkt"))
         elif n.kind == "heatpump":
             dhw = None if i.get("dhw_temp") is None else fnum(i["dhw_temp"])
             flow = None if i.get("flow_temp") is None else fnum(i["flow_temp"])
