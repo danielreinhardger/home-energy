@@ -123,6 +123,23 @@ class OpenWbDeviceTests(unittest.TestCase):
             d.read_values()
 
 
+class BoxTests(unittest.TestCase):
+    def setUp(self):
+        self.flow = build_flow(HIERARCHY, NAMES, {0: 0, 2: -3000, 4: 0, 6: 0}, 3000, openwb={"cp_mode": "PV"})
+
+    def test_the_wallbox_stands_right_of_the_house(self):
+        kinds = [n["kind"] for n in self.flow["nodes"]]
+        self.assertLess(kinds.index("house"), kinds.index("charger"))
+        self.assertLess(kinds.index("inverter"), kinds.index("house"))
+
+    def test_boxes_do_not_show_device_names(self):
+        lines = [d for n in self.flow["nodes"] for d in n["details"]]
+        for name in NAMES.values():
+            for word in (name, name.split()[0]):
+                self.assertFalse([x for x in lines if word in x], word)
+        self.assertIn("PV", next(n for n in self.flow["nodes"] if n["kind"] == "charger")["details"])
+
+
 if __name__ == "__main__":
     unittest.main()
 
